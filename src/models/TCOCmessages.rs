@@ -24,11 +24,11 @@ impl fmt::Debug for FE_REQUEST {
 pub struct FE_CONNECT {
     pub message_length: i32,
     pub command_id: i32,
+    /// Protocol version (4 bytes).
+    pub version_id: i32,
     pub request_id: i64,
-    pub session_id: i64,
     pub username: String,
     pub password: String,
-    pub station: i32,
     pub timeout: i32,
 }
 impl fmt::Debug for FE_CONNECT {
@@ -36,11 +36,10 @@ impl fmt::Debug for FE_CONNECT {
         f.debug_struct("FE_CONNECT")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
-            .field("session_id", &self.session_id)
             .field("username", &self.username.trim_end_matches('\0'))
             .field("password", &self.password.trim_end_matches('\0'))
-            .field("station", &self.station)
             .field("timeout", &self.timeout)
             .finish()
     }
@@ -49,6 +48,8 @@ impl fmt::Debug for FE_CONNECT {
 pub struct FE_CONNECT_RESP {
     pub message_length: i32,
     pub command_id: i32,
+    /// Protocol version (4 bytes).
+    pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
     pub status: i32,
@@ -58,6 +59,7 @@ impl fmt::Debug for FE_CONNECT_RESP {
         f.debug_struct("FE_CONNECT_RESP")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
             .field("session_id", &self.session_id)
             .field("status", &self.status)

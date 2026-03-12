@@ -1,5 +1,5 @@
 //! Handler CONNECT: tạo session, FE_CONNECT_RESP, cập nhật session map.
-//! - `handle_connect`: parse FE_CONNECT (44/52 byte), xác thực user, tạo session DB, gửi FE_CONNECT_RESP.
+//! - `handle_connect`: parse FE_CONNECT (44 byte per spec 2.3.1.7.1), xác thực user, tạo session DB, gửi FE_CONNECT_RESP (32 byte per spec 2.3.1.7.2).
 //!   Luồng: giải mã → kiểm tra format → auth (hoặc bypass) → sequence session_id → lưu TCOC_SESSIONS → gửi response.
 
 use crate::configs::mediation_db::MEDIATION_DB;
@@ -18,15 +18,17 @@ use std::error::Error;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
-/// Gửi FE_CONNECT_RESP với status lỗi xác thực (301, 305, ...).
+/// Sends FE_CONNECT_RESP with auth error status (301, 305, ...). Message length 32 bytes per spec 2.3.1.7.2.
 async fn send_connect_error(
     encryptor: &Aes128CbcEnc,
+    version_id: i32,
     request_id: i64,
     status: i32,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut fe_connect_resp: FE_CONNECT_RESP = FE_CONNECT_RESP::default();
-    fe_connect_resp.message_length = fe_protocol::response_header_status_len();
+    fe_connect_resp.message_length = fe_protocol::CONNECT_RESP_LEN;
     fe_connect_resp.command_id = fe::CONNECT_RESP;
+    fe_connect_resp.version_id = version_id;
     fe_connect_resp.request_id = request_id;
     fe_connect_resp.session_id = 0;
     fe_connect_resp.status = status;
@@ -47,9 +49,14 @@ async fn send_connect_error(
     buffer_write
         .write_i32_le(fe_connect_resp.command_id)
         .await?;
-    fe_protocol::write_fe_request_id_session_id(&mut buffer_write, request_id, 0)
-        .await?;
-    buffer_write.write_i32_le(fe_connect_resp.status).await?;
+    fe_protocol::write_connect_resp_body(
+        &mut buffer_write,
+        fe_connect_resp.version_id,
+        request_id,
+        0,
+        fe_connect_resp.status,
+    )
+    .await?;
     let encrypted_reply = encryptor
         .clone()
         .encrypt_padded_vec_mut::<Pkcs7>(&buffer_write);
@@ -81,12 +88,11 @@ pub async fn handle_connect(
     let mut fe_connect: FE_CONNECT = FE_CONNECT::default();
     fe_connect.message_length = rq.message_length;
     fe_connect.command_id = rq.command_id;
-    fe_connect.request_id = i64::from_le_bytes(decrypted[8..16].try_into().unwrap());
-    fe_connect.session_id = i64::from_le_bytes(decrypted[16..24].try_into().unwrap());
-    fe_connect.username = String::from_utf8_lossy(&decrypted[24..34]).to_string();
-    fe_connect.password = String::from_utf8_lossy(&decrypted[34..44]).to_string();
-    fe_connect.station = i32::from_le_bytes(decrypted[44..48].try_into().unwrap());
-    fe_connect.timeout = i32::from_le_bytes(decrypted[48..52].try_into().unwrap());
+    fe_connect.version_id = i32::from_le_bytes(decrypted[8..12].try_into().unwrap());
+    fe_connect.request_id = i64::from_le_bytes(decrypted[12..20].try_into().unwrap());
+    fe_connect.username = String::from_utf8_lossy(&decrypted[20..30]).to_string();
+    fe_connect.password = String::from_utf8_lossy(&decrypted[30..40]).to_string();
+    fe_connect.timeout = i32::from_le_bytes(decrypted[40..44].try_into().unwrap());
 
     tracing::debug!(
         conn_id,
@@ -125,7 +131,7 @@ pub async fn handle_connect(
         crate::utils::parse_env_bool_loose(std::env::var("CONNECT_BYPASS_AUTH").ok().as_deref());
 
     let username = normalize_etag(&fe_connect.username);
-    let toll_id = fe_connect.station as i64;
+    let toll_id = 0_i64;
 
     let mut authenticated_user_id: Option<i64> = None;
     if !bypass_auth {
@@ -148,7 +154,7 @@ pub async fn handle_connect(
                         valid_code: Some("INVALID".to_string()),
                         ip_address: client_ip.map(String::from),
                         user_name: Some(normalize_etag(&fe_connect.username)),
-                        toll_id: Some(fe_connect.station as i64),
+                        toll_id: Some(0),
                         status: Some("FAILED".to_string()),
                         description: Some("CONNECT account not activated".to_string()),
                         server_id: Some(1),
@@ -156,12 +162,13 @@ pub async fn handle_connect(
                     if let Err(e) = TcocSessionService::new().save(&failure_session).await {
                         tracing::error!(session_id = session_id_from_seq, error = %e, "[Network] TCOC_SESSIONS save failure session failed");
                     }
-                    return send_connect_error(
-                        &encryptor,
-                        fe_connect.request_id,
-                        fe::ACCOUNT_NOT_ACTIVATED,
-                    )
-                    .await;
+                return send_connect_error(
+                    &encryptor,
+                    fe_connect.version_id,
+                    fe_connect.request_id,
+                    fe::ACCOUNT_NOT_ACTIVATED,
+                )
+                .await;
                 }
                 let mut hasher = sha1::Sha1::new();
                 hasher.update(password.as_bytes());
@@ -178,7 +185,7 @@ pub async fn handle_connect(
                         valid_code: Some("INVALID".to_string()),
                         ip_address: client_ip.map(String::from),
                         user_name: Some(normalize_etag(&fe_connect.username)),
-                        toll_id: Some(fe_connect.station as i64),
+                        toll_id: Some(0),
                         status: Some("FAILED".to_string()),
                         description: Some("CONNECT invalid password".to_string()),
                         server_id: Some(1),
@@ -188,6 +195,7 @@ pub async fn handle_connect(
                     }
                     return send_connect_error(
                         &encryptor,
+                        fe_connect.version_id,
                         fe_connect.request_id,
                         fe::NOT_FOUND_STATION_LANE,
                     )
@@ -207,7 +215,7 @@ pub async fn handle_connect(
                     valid_code: Some("INVALID".to_string()),
                     ip_address: client_ip.map(String::from),
                     user_name: Some(normalize_etag(&fe_connect.username)),
-                    toll_id: Some(fe_connect.station as i64),
+                    toll_id: Some(0),
                     status: Some("FAILED".to_string()),
                     description: Some("CONNECT user not found".to_string()),
                     server_id: Some(1),
@@ -217,6 +225,7 @@ pub async fn handle_connect(
                 }
                 return send_connect_error(
                     &encryptor,
+                    fe_connect.version_id,
                     fe_connect.request_id,
                     fe::USER_NOT_FOUND,
                 )
@@ -233,7 +242,7 @@ pub async fn handle_connect(
                     valid_code: Some("INVALID".to_string()),
                     ip_address: client_ip.map(String::from),
                     user_name: Some(normalize_etag(&fe_connect.username)),
-                    toll_id: Some(fe_connect.station as i64),
+                    toll_id: Some(0),
                     status: Some("FAILED".to_string()),
                     description: Some("CONNECT query user failed".to_string()),
                     server_id: Some(1),
@@ -243,6 +252,7 @@ pub async fn handle_connect(
                 }
                 return send_connect_error(
                     &encryptor,
+                    fe_connect.version_id,
                     fe_connect.request_id,
                     fe::NOT_FOUND_STATION_LANE,
                 )
@@ -263,9 +273,9 @@ pub async fn handle_connect(
         valid_code: Some("VALID".to_string()),
         ip_address: client_ip.map(String::from),
         user_name: Some(normalize_etag(&fe_connect.username)),
-        toll_id: Some(fe_connect.station as i64),
+        toll_id: Some(0),
         status: Some("ACTIVE".to_string()),
-        description: Some(format!("FE_CONNECT from station {}", fe_connect.station)),
+        description: Some("FE_CONNECT".to_string()),
         server_id: Some(1),
     };
 
@@ -276,7 +286,6 @@ pub async fn handle_connect(
                 conn_id,
                 request_id = fe_connect.request_id,
                 session_id = inserted_session_id,
-                station = fe_connect.station,
                 "[Network] session saved"
             );
         }
@@ -286,8 +295,9 @@ pub async fn handle_connect(
     }
 
     let mut fe_connect_resp: FE_CONNECT_RESP = FE_CONNECT_RESP::default();
-    fe_connect_resp.message_length = fe_protocol::response_header_status_len();
+    fe_connect_resp.message_length = fe_protocol::CONNECT_RESP_LEN;
     fe_connect_resp.command_id = fe::CONNECT_RESP;
+    fe_connect_resp.version_id = fe_connect.version_id;
     fe_connect_resp.request_id = fe_connect.request_id;
     fe_connect_resp.session_id = session_id_from_seq;
     fe_connect_resp.status = 0;
@@ -332,13 +342,14 @@ pub async fn handle_connect(
     buffer_write
         .write_i32_le(fe_connect_resp.command_id)
         .await?;
-    fe_protocol::write_fe_request_id_session_id(
+    fe_protocol::write_connect_resp_body(
         &mut buffer_write,
+        fe_connect_resp.version_id,
         fe_connect_resp.request_id,
         fe_connect_resp.session_id,
+        fe_connect_resp.status,
     )
     .await?;
-    buffer_write.write_i32_le(fe_connect_resp.status).await?;
 
     let encrypted_reply = encryptor
         .clone()

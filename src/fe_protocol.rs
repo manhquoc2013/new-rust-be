@@ -2,17 +2,16 @@
 //!
 //! # REQUEST byte layout (i64 IDs: header 24 bytes)
 //!
-//! ## CONNECT (52 bytes)
+//! ## CONNECT (44 bytes) – 2.3.1.7.1
 //! | Field        | Offset  |
 //! |--------------|---------|
 //! | msg_len      | 0..4    |
 //! | command_id   | 4..8    |
-//! | request_id   | 8..16   |
-//! | session_id   | 16..24  |
-//! | username     | 24..34  |
-//! | password     | 34..44  |
-//! | station      | 44..48  |
-//! | timeout      | 48..52  |
+//! | version_id   | 8..12   |
+//! | request_id   | 12..20  |
+//! | username     | 20..30  |
+//! | password     | 30..40  |
+//! | timeout      | 40..44  |
 //!
 //! ## HANDSHAKE / TERMINATE (24 bytes)
 //! | Field      | Offset  |
@@ -35,8 +34,8 @@ use tokio::io::AsyncWriteExt;
 
 /// Minimum FE request message length (i64 IDs: 8-byte request_id, 8-byte session_id).
 pub mod len {
-    /// CONNECT: 4+4+8+8 + username 10 + password 10 + station 4 + timeout 4 = 52
-    pub const CONNECT: usize = 52;
+    /// CONNECT (2.3.1.7.1): 4+4+4+8+10+10+4 = 44
+    pub const CONNECT: usize = 44;
     /// HANDSHAKE / TERMINATE: 4+4+8+8 = 24
     pub const HANDSHAKE: usize = 24;
     pub const TERMINATE: usize = 24;
@@ -115,7 +114,7 @@ impl FeBodyOffsets {
 pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
     match command_id {
         fe::CONNECT => FeBodyOffsets {
-            toll: (44, 48),
+            toll: (0, 0),
             etag: (0, 0),
             lane: (0, 0),
             plate: (0, 0),
@@ -183,6 +182,24 @@ pub async fn write_fe_ticket_id<W: AsyncWriteExt + Unpin>(
 /// Returns message_length for response with only header + status (CONNECT_RESP, SHAKE_RESP, TERMINATE_RESP, COMMIT_RESP, ROLLBACK_RESP). 4+4+8+8+4 = 28.
 pub fn response_header_status_len() -> i32 {
     28
+}
+
+/// CONNECT_RESP (2.3.1.7.2): 32 bytes = message_length(4) + command_id(4) + version_id(4) + request_id(8) + session_id(8) + status(4).
+pub const CONNECT_RESP_LEN: i32 = 32;
+
+/// Write CONNECT_RESP fields to buffer: version_id(4), request_id(8), session_id(8), status(4). Caller must have already written message_length(4) and command_id(4).
+pub async fn write_connect_resp_body<W: AsyncWriteExt + Unpin>(
+    w: &mut W,
+    version_id: i32,
+    request_id: i64,
+    session_id: i64,
+    status: i32,
+) -> io::Result<()> {
+    w.write_i32_le(version_id).await?;
+    w.write_i64_le(request_id).await?;
+    w.write_i64_le(session_id).await?;
+    w.write_i32_le(status).await?;
+    Ok(())
 }
 
 /// Returns message_length for FE_CHECKIN_IN_RESP (i64: 4+4+8+8+4+24+4+4+4+4+4+4+4+10+4+4 = 98).

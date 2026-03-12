@@ -345,8 +345,10 @@ pub async fn process_request(
         || command_id == fe::COMMIT
         || command_id == fe::ROLLBACK
     {
-        if data.len() >= off.toll.1 {
+        if off.toll.1 > off.toll.0 && data.len() >= off.toll.1 {
             Some(i32::from_le_bytes(data[off.toll.0..off.toll.1].try_into().unwrap()) as i64)
+        } else if command_id == fe::CONNECT {
+            None
         } else {
             tracing::warn!(
                 conn_id,
