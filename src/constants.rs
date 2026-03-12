@@ -28,10 +28,10 @@ pub mod fe {
     /// COMMIT_RESP – Backend trả FE sau khi xử lý COMMIT (84 bytes, spec 3B).
     pub const COMMIT_RESP: i32 = 0x69;
 
-    /// ROLLBACK – FE gửi req (152 bytes). Backend trả ROLLBACK_RESP.
+    /// ROLLBACK – FE gửi req (152 bytes, spec 3A CHECKIN_ROLLBACK_BOO). Backend trả ROLLBACK_RESP. Processor gọi handle_rollback.
     pub const ROLLBACK: i32 = 0x6A;
 
-    /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (84 bytes).
+    /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (84 bytes, spec 3B CHECKIN_ROLLBACK_BOO_RESP).
     pub const ROLLBACK_RESP: i32 = 0x6B;
 
     /// TERMINATE – FE gửi req (28 bytes). Backend trả TERMINATE_RESP.
@@ -69,6 +69,11 @@ pub mod fe {
     pub const CHECKIN_COMMIT_BOO: i32 = 0x68;
     /// BOO 3B CHECKIN_COMMIT_BOO_RESP (same value as COMMIT_RESP). Spec 2.3.1.7.8.
     pub const CHECKIN_COMMIT_BOO_RESP: i32 = 0x69;
+
+    /// BOO 3A CHECKIN_ROLLBACK_BOO (same value as ROLLBACK). Spec 2.3.1.7.9.
+    pub const CHECKIN_ROLLBACK_BOO: i32 = 0x6A;
+    /// BOO 3B CHECKIN_ROLLBACK_BOO_RESP (same value as ROLLBACK_RESP). Spec 2.3.1.7.10.
+    pub const CHECKIN_ROLLBACK_BOO_RESP: i32 = 0x6B;
 
     /// FE status: 0=Success, 14..107=subscriber/account/etag, 200..304=transaction/route/price, 901..903=system/BOO integration.
     /// 301 NOT_FOUND_STATION_LANE - Lane not found for station; CONNECT: used for unauthorized (wrong password)
@@ -173,8 +178,8 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::CHECKIN_RESP => "FE_CHECKIN_RESP",
         fe::COMMIT => "FE_COMMIT", // Same as BOO CHECKIN_COMMIT_BOO (3A, 0x68)
         fe::COMMIT_RESP => "FE_COMMIT_RESP", // Same as BOO CHECKIN_COMMIT_BOO_RESP (3B, 0x69)
-        fe::ROLLBACK => "FE_ROLLBACK",
-        fe::ROLLBACK_RESP => "FE_ROLLBACK_RESP",
+        fe::ROLLBACK => "FE_ROLLBACK", // Same as BOO CHECKIN_ROLLBACK_BOO (3A, 0x6A)
+        fe::ROLLBACK_RESP => "FE_ROLLBACK_RESP", // Same as BOO CHECKIN_ROLLBACK_BOO_RESP (3B, 0x6B)
         fe::TERMINATE => "FE_TERMINATE",
         fe::TERMINATE_RESP => "FE_TERMINATE_RESP",
         _ => "UNKNOWN_COMMAND",

@@ -1,4 +1,5 @@
-//! Handler ROLLBACK: FE gửi ROLLBACK (req), handler cập nhật trạng thái, trả FE_ROLLBACK_RESP (resp).
+//! Handler ROLLBACK: FE gửi ROLLBACK (req), handler trả FE_ROLLBACK_RESP (resp).
+//! Cặp req/resp từ FE: FE gửi ROLLBACK (3A/0x6A) → processor gọi handle_rollback → handler xử lý, trả ROLLBACK_RESP (3B/0x6B) cho FE.
 
 use super::common::serialize_and_encrypt_rollback_response;
 use crate::constants::fe;

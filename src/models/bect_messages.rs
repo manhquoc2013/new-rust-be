@@ -254,6 +254,103 @@ impl fmt::Debug for COMMIT_BOO_RESP {
     }
 }
 
+// ============== 3A CHECKIN_ROLLBACK_BOO (0x6A, 152 bytes) ==============
+
+/// CHECKIN_ROLLBACK_BOO (3A) – Highway Back-End sends to Card-issuer Back-End to rollback check-in.
+/// Command ID: 106 (0x6A). Size: 152 bytes. Spec: 2.3.1.7.9.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct CHECKIN_ROLLBACK_BOO {
+    pub message_length: i32,   // 4 – 152
+    pub command_id: i32,       // 4 – 106
+    pub version_id: i32,       // 4
+    pub request_id: i64,       // 8
+    pub session_id: i64,       // 8
+    pub timestamp: i64,        // 8 – epoch ms when sending
+    pub ticket_id: i64,        // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,     // 8 – BOOB unique transaction ID
+    pub tid: String,           // 24 – TID
+    pub etag: String,          // 24 – EPC/ETAG
+    pub station: i32,          // 4
+    pub station_type: String,  // 1 – C: closed, O: open
+    pub lane_type: String,     // 1 – I: in, O: out; null for open station
+    pub lane: i32,             // 4
+    pub plate_from_toll: String, // 10 – recognized plate
+    pub commit_datetime: i64,   // 8 – epoch ms
+    pub general1: [u8; 8],     // 8
+    pub general2: [u8; 16],   // 16
+}
+
+impl fmt::Debug for CHECKIN_ROLLBACK_BOO {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CHECKIN_ROLLBACK_BOO")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("ticket_id", &self.ticket_id)
+            .field("ref_trans_id", &self.ref_trans_id)
+            .field("tid", &self.tid.trim_end_matches('\0'))
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("station", &self.station)
+            .field("station_type", &self.station_type.trim_end_matches('\0'))
+            .field("lane_type", &self.lane_type.trim_end_matches('\0'))
+            .field("lane", &self.lane)
+            .field("plate_from_toll", &self.plate_from_toll.trim_end_matches('\0'))
+            .field("commit_datetime", &self.commit_datetime)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
+// ============== ROLLBACK_BOO_RESP / CHECKIN_ROLLBACK_BOO_RESP (3B, 0x6B, 84 bytes) ==============
+
+/// CHECKIN_ROLLBACK_BOO_RESP (3B) – Card-issuer Back-End response to CHECKIN_ROLLBACK_BOO (3A).
+/// Highway Back-End receives this from Card-issuer Back-End after rollback check-in.
+/// Command ID: 107 (0x6B). Size: 84 bytes. Spec: 2.3.1.7.10.
+#[allow(dead_code)]
+pub type CHECKIN_ROLLBACK_BOO_RESP = ROLLBACK_BOO_RESP;
+
+/// ROLLBACK_BOO_RESP (3B) – Same as CHECKIN_ROLLBACK_BOO_RESP. Command ID: 107 (0x6B). Size: 84 bytes.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct ROLLBACK_BOO_RESP {
+    pub message_length: i32,  // 4 – 84
+    pub command_id: i32,      // 4 – 107
+    pub version_id: i32,      // 4
+    pub request_id: i64,      // 8
+    pub session_id: i64,      // 8
+    pub timestamp: i64,       // 8 – epoch ms when responding
+    pub process_time: i32,    // 4 – millisecond
+    pub ticket_id: i64,       // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,    // 8 – BOOB unique transaction ID
+    pub status: i32,          // 4 – 0: success
+    pub general1: [u8; 8],    // 8
+    pub general2: [u8; 16],  // 16
+}
+
+impl fmt::Debug for ROLLBACK_BOO_RESP {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ROLLBACK_BOO_RESP")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("process_time", &self.process_time)
+            .field("ticket_id", &self.ticket_id)
+            .field("ref_trans_id", &self.ref_trans_id)
+            .field("status", &self.status)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
 // ============== CHECKOUT_RESERVE_BOO (variable) ==============
 
 #[allow(dead_code)]
