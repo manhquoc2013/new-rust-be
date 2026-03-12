@@ -1,0 +1,22 @@
+# PodDisruptionBudget: Ensures minimum availability during voluntary disruptions
+# PodDisruptionBudget: Đảm bảo tính khả dụng tối thiểu trong các gián đoạn tự nguyện
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rust-core-transaction-pdb
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+    security: "high-availability"
+spec:
+  # Minimum number of pods that must be available
+  # Số lượng pods tối thiểu phải có sẵn
+  minAvailable: 1
+  # Selector to match pods
+  # Selector để khớp với pods
+  selector:
+    matchLabels:
+      app: rust-core-transaction
+  # Unhealthy pod eviction policy
+  # Chính sách loại bỏ pod không khỏe mạnh
+  unhealthyPodEvictionPolicy: IfHealthyBudget

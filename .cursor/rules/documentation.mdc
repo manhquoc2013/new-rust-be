@@ -1,0 +1,92 @@
+---
+name: documentation
+description: Quy tắc document và comment trong source - tránh dư thừa, gây rối
+globs: "**/*.rs"
+---
+
+# Document và comment trong source
+
+Chỉ thêm document/comment **hợp lý**, không ghi quá nhiều dẫn đến dư thừa và khó đọc.
+
+## Ngôn ngữ
+
+- **Trong source code (file `.rs`)**: Mọi `///`, `//!` và comment `//` trong source **phải dùng tiếng Anh**. Không viết song ngữ (Anh + Vi); chỉ dùng **một ngôn ngữ — tiếng Anh**.
+- **File tài liệu (`.md`, `.mdc`, v.v.)**: Nội dung tài liệu **giữ tiếng Việt** theo quy ước dự án (xem `doc-writing.mdc`).
+
+## Nguyên tắc
+
+1. **Doc ngắn gọn, đúng đủ logic**: Doc phải **ngắn gọn**, **biểu thị đúng và đủ** logic (phạm vi, điều kiện, hậu quả). Một dòng cho item đơn giản; vài dòng cho API/struct quan trọng. Tránh dài dòng, lặp lại code.
+2. **Luồng khó có thể mở rộng**: Với module/hàm có **luồng phức tạp** (multi-connection, retry, state machine, race), có thể thêm block **"Complex flow"** (hoặc tương đương) mô tả chi tiết hơn: thứ tự bước, nhánh lỗi, tối ưu. Phần này extend khi cần, không bắt buộc cho mọi file.
+3. **Doc cho public API**: Dùng `///` cho item public. Một dòng tóm tắt; dòng thứ hai chỉ khi cần (vd. Multi-connection, edge case).
+4. **Comment trong code**: Chỉ khi cần giải thích **tại sao** (why) hoặc **ràng buộc/format** không rõ từ code; bỏ comment mô tả hiển nhiên.
+
+## Nên tránh
+
+- **Doc/comment song ngữ**: Một dòng tiếng Anh rồi một dòng tiếng Việt (hoặc ngược lại). Chỉ giữ **một dòng tiếng Anh**.
+- **Comment trùng nội dung**: Hai dòng cùng ý. Chỉ giữ một dòng hoặc bỏ nếu hiển nhiên.
+- Comment chỉ lặp lại tên biến/hàm (vd. `// Save to database` ngay trên `repo.save(...)`).
+- Nhiều dòng comment cho từng bước đơn giản (Step 1, Step 2...) khi code đã tự mô tả.
+- Doc block dài cho function đơn giản; ưu tiên một dòng tóm tắt.
+
+## Ví dụ
+
+```rust
+// ❌ Redundant (duplicate in two languages)
+/// Service for TCOC_REQUEST with cache-aside pattern
+/// Service TCOC_REQUEST với pattern cache-aside
+pub struct TcocRequestService { ... }
+
+// ✅ One line, English
+/// Service for TCOC_REQUEST with cache-aside pattern.
+pub struct TcocRequestService { ... }
+```
+
+```rust
+// ❌ Comment adds no information
+// Save session to database
+let _ = service.save(&session).await;
+
+// ✅ Omit comment or only add when there is a special reason
+let _ = service.save(&session).await;
+```
+
+```rust
+// ❌ Multiple lines for something already clear
+// ProcessTypeGuard will automatically clear process_type when dropped
+let _guard = ProcessTypeGuard::new(process_type);
+
+// ✅ Omit or one line if needed
+let _guard = ProcessTypeGuard::new(process_type);
+```
+
+## Module-level Documentation (`//!`)
+
+Khi tạo doc cấp module (đầu file, dùng `//!`):
+
+1. **Mô tả file**: Một dòng nêu rõ file/module làm gì (phạm vi, trách nhiệm) — **bằng tiếng Anh**.
+2. **Logic chính**: Vài dòng ngắn: cấu hình/entry, luồng tổng quát, state quan trọng. Đúng đủ, không dài dòng.
+3. **Complex flow** (tùy chọn): Nếu module có luồng khó (retry, multi-connection, nhiều nhánh lỗi), thêm block **"Complex flow"** mô tả chi tiết hơn (bước, retry, cleanup, edge case). Có thể extend sau khi cần.
+
+Giữ ngắn gọn; dùng **tiếng Anh**.
+
+```rust
+//! VDTC CHECKIN handler (BOO2).
+//! - `handle_checkin_vdtc`: parse FE_CHECKIN, call BOO2 CHECKIN_RESERVE_BOO, compute fee, save DB, return FE_CHECKIN_IN_RESP.
+//! Flow: decrypt request → lookup cache/DB → send BOO2 → receive response → rating → save TCD + ETDR → serialize response.
+```
+
+## Khi nào nên comment
+
+- Format/offset binary (e.g. "COMMIT: 98 bytes, request_id/session_id i64").
+- Lý do retry/backoff hoặc xử lý race condition.
+- Ràng buộc nghiệp vụ không thể suy ra từ code (e.g. "Only save ETDR after verifying record exists in DB").
+
+Tất cả bằng **tiếng Anh**.
+
+## Rà soát doc (khi cập nhật hoặc audit)
+
+- Doc **ngắn gọn**, **đúng đủ** logic; luồng khó có thể có block "Complex flow" mở rộng chi tiết.
+- Tìm cặp tiếng Anh + tiếng Việt cùng nội dung → giữ **một dòng tiếng Anh**, xóa dòng tiếng Việt trong source.
+- Tìm comment/doc thuần tiếng Việt trong file `.rs` → đổi sang **tiếng Anh** hoặc bỏ nếu dư thừa.
+- Module (`//!`): ít nhất một dòng mô tả file **bằng tiếng Anh**.
+- Tên cột DB / enum value (vd. CHECKIN_STATUS, PASS) giữ nguyên; chỉ nội dung mô tả trong comment/doc dùng tiếng Anh.

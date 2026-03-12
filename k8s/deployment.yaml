@@ -1,0 +1,329 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rust-core-transaction
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+spec:
+  # HA: 2 replicas; mỗi pod có TICKET_ID_IP_SUFFIX từ metadata.name (app lấy 3 ký tự cuối). Kafka consumer dùng leader lock KeyDB nên chỉ 1 pod consume.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rust-core-transaction
+  template:
+    metadata:
+      labels:
+        app: rust-core-transaction
+    spec:
+      # SECURITY: Use dedicated service account instead of default
+      # Sử dụng service account riêng thay vì default
+      serviceAccountName: rust-core-transaction-sa
+      
+      # SECURITY: Explicitly disable service account token automount
+      # Vô hiệu hóa rõ ràng việc tự động mount service account token
+      # Application doesn't need Kubernetes API access, so tokens are not needed
+      # Ứng dụng không cần truy cập Kubernetes API, nên không cần tokens
+      automountServiceAccountToken: false
+      
+      # SECURITY: Pod Security Context - applies to all containers
+      # Pod Security Context - áp dụng cho tất cả containers
+      securityContext:
+        # Run as non-root user (UID 1000 = appuser from Dockerfile)
+        # Chạy với user không phải root (UID 1000 = appuser từ Dockerfile)
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        # Supplemental groups (empty = no additional groups)
+        # Các nhóm bổ sung (rỗng = không có nhóm bổ sung)
+        supplementalGroups: []
+        # Prevent privilege escalation
+        # Ngăn chặn leo thang đặc quyền
+        allowPrivilegeEscalation: false
+        # Drop all capabilities and add only what's needed
+        # Xóa tất cả capabilities và chỉ thêm những gì cần thiết
+        capabilities:
+          drop:
+            - ALL
+          # Add only necessary capabilities if needed
+          # Chỉ thêm capabilities cần thiết nếu cần
+          # add:
+          #   - NET_BIND_SERVICE  # Only if app needs to bind to privileged ports (< 1024)
+        # Seccomp profile for additional security
+        # Seccomp profile để tăng cường bảo mật
+        seccompProfile:
+          type: RuntimeDefault
+        # Sysctls restrictions (only safe sysctls allowed in restricted mode)
+        # Hạn chế sysctls (chỉ các sysctls an toàn được phép trong restricted mode)
+        # Note: In restricted Pod Security Standards, only specific sysctls are allowed
+        # Lưu ý: Trong Pod Security Standards restricted, chỉ một số sysctls cụ thể được phép
+        # Uncomment and adjust if needed:
+        # sysctls:
+        #   - name: net.ipv4.ip_unprivileged_port_start
+        #     value: "0"
+        # SELinux options (if SELinux is enabled)
+        # Tùy chọn SELinux (nếu SELinux được bật)
+        # seLinuxOptions:
+        #   type: "container_runtime_t"
+        #   level: "s0:c123,c456"
+      
+      containers:
+      - name: rust-core-transaction
+        image: hoanvu/rust-core-transaction:latest
+        imagePullPolicy: IfNotPresent
+        
+        # SECURITY: Container Security Context
+        # Container Security Context
+        securityContext:
+          # Ensure container runs as non-root
+          # Đảm bảo container chạy với user không phải root
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          # Prevent privilege escalation
+          # Ngăn chặn leo thang đặc quyền
+          allowPrivilegeEscalation: false
+          # Drop all capabilities (principle of least privilege)
+          # Xóa tất cả capabilities (nguyên tắc least privilege)
+          capabilities:
+            drop:
+              - ALL
+            # Add only necessary capabilities if needed
+            # Chỉ thêm capabilities cần thiết nếu cần
+            # add:
+            #   - NET_BIND_SERVICE  # Only if app needs to bind to ports < 1024
+          # Read-only root filesystem (prevents tampering)
+          # Filesystem root chỉ đọc (ngăn chặn chỉnh sửa)
+          readOnlyRootFilesystem: true
+          # Seccomp profile (restricts system calls)
+          # Seccomp profile (hạn chế system calls)
+          seccompProfile:
+            type: RuntimeDefault
+          # AppArmor profile (if AppArmor is enabled)
+          # AppArmor profile (nếu AppArmor được bật)
+          # appArmorProfile: runtime/default
+          # SELinux options (if SELinux is enabled)
+          # Tùy chọn SELinux (nếu SELinux được bật)
+          # seLinuxOptions:
+          #   type: "container_runtime_t"
+          #   level: "s0:c123,c456"
+        
+        # Mount tmpfs for writable directories if needed
+        # Mount tmpfs cho các thư mục cần ghi nếu cần
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+          - name: var-tmp
+            mountPath: /var/tmp
+        
+        ports:
+        - name: http
+          containerPort: 9001
+          protocol: TCP
+        env:
+        # Application configuration
+        # SECURITY: Non-sensitive config from ConfigMap
+        # BẢO MẬT: Cấu hình không nhạy cảm từ ConfigMap
+        - name: PORT_LISTEN
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: port-listen
+        - name: BOOX1_PREFIX_LIST
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: boox1-prefix-list
+        - name: BOOX2_PREFIX_LIST
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: boox2-prefix-list
+        - name: CACHE_RELOAD_INTERVAL_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: cache-reload-interval-seconds
+
+        # HA: mỗi pod có TICKET_ID_IP_SUFFIX từ Pod IP (status.podIP) → app nhận dạng IP và lấy 3 chữ số từ 2 octet cuối → tránh trùng giữa các replica.
+        - name: TICKET_ID_IP_SUFFIX
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        # ROAMING_SESSIONS: POD_IP → CLIENT_IP_ADDRESS (IPv4 only). NODE_ID lưu "VETC"/"VDTC" theo BOO.
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        # Kafka consumer: leader lock qua KeyDB (KAFKA_CONSUMER_LEADER_LOCK_KEY / TTL) — chỉ một pod consume, không cần tắt khi scale.
+
+        # VDTC connection configuration
+        # Non-sensitive from ConfigMap
+        - name: VDTC_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: vdtc-host
+        - name: VDTC_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: vdtc-port
+        - name: DELAY_TIME_RECONNECT_VDTC
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: delay-time-reconnect-vdtc
+        
+        # Sensitive VDTC credentials from Secrets
+        - name: VDTC_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: rust-core-transaction-secrets
+              key: vdtc-username
+        - name: VDTC_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rust-core-transaction-secrets
+              key: vdtc-password
+        - name: VDTC_KEY_ENC
+          valueFrom:
+            secretKeyRef:
+              name: rust-core-transaction-secrets
+              key: vdtc-key-enc
+        
+        # Cache System configuration
+        # SECURITY: KEYDB_URL may contain credentials, use Secret
+        # BẢO MẬT: KEYDB_URL có thể chứa credentials, sử dụng Secret
+        - name: KEYDB_URL
+          valueFrom:
+            secretKeyRef:
+              name: rust-core-transaction-secrets
+              key: keydb-url
+
+        # Kafka (optional): set KAFKA_BOOTSTRAP_SERVERS to enable; from ConfigMap
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-bootstrap-servers
+        - name: KAFKA_TOPIC_CHECKIN
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-topic-checkin
+        - name: KAFKA_TOPIC_CHECKOUT
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-topic-checkout
+        - name: KAFKA_DATA_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-data-version
+        - name: KAFKA_QUEUE_CAPACITY
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-queue-capacity
+        - name: KAFKA_SEND_BATCH_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-send-batch-size
+        - name: KAFKA_RETRIES
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-retries
+        - name: KAFKA_REQUEST_TIMEOUT_MS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-request-timeout-ms
+        - name: KAFKA_RETRY_INITIAL_DELAY_MS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-retry-initial-delay-ms
+        - name: KAFKA_RETRY_MAX_DELAY_MS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-retry-max-delay-ms
+        # HA: Kafka consumer CHECKIN_HUB_INFO (leader lock KeyDB)
+        - name: KAFKA_TOPIC_CHECKIN_HUB_ONLINE
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-topic-checkin-hub-online
+        - name: KAFKA_CONSUMER_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-consumer-enabled
+        - name: KAFKA_CONSUMER_LEADER_LOCK_KEY
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-consumer-leader-lock-key
+        - name: KAFKA_CONSUMER_LEADER_LOCK_TTL_SECS
+          valueFrom:
+            configMapKeyRef:
+              name: rust-core-transaction-config
+              key: kafka-consumer-leader-lock-ttl-secs
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 9001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 9001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      
+      # Volumes for writable directories
+      # Volumes cho các thư mục cần ghi
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: var-tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rust-core-transaction-service
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+spec:
+  type: ClusterIP
+  externalTrafficPolicy: Local
+  internalTrafficPolicy: Cluster
+  ports:
+  - port: 9001
+    targetPort: 9001
+    protocol: TCP
+    name: http
+  selector:
+    app: rust-core-transaction

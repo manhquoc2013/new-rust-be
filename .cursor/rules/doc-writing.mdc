@@ -1,0 +1,37 @@
+---
+name: doc-writing
+description: Quy tắc viết tài liệu Markdown - chuẩn markdownlint, dễ hiểu, đủ thông tin
+globs: "**/*.md"
+---
+
+# Viết tài liệu Markdown
+
+Khi viết hoặc sửa tài liệu (file `.md`), tuân thủ hai yêu cầu sau.
+
+## 1. Chuẩn theo markdownlint
+
+- Sử dụng cấu hình trong `.markdownlint.json` (nếu có) ở root project.
+- Trước khi hoàn tất: chạy `npx markdownlint-cli "**/*.md"` (hoặc từng file) để kiểm tra và sửa lỗi.
+- Một số quy tắc thường gặp:
+  - **MD001**: Heading tăng dần (không nhảy cấp, ví dụ h2 rồi h4).
+  - **MD012**: Không có nhiều dòng trống liên tiếp (tối đa 1 dòng trống).
+  - **MD022**: Có dòng trống trước và sau heading.
+  - **MD031**: Có dòng trống trước và sau khối code (fenced code block).
+  - **MD032**: Danh sách (list) được bao quanh bởi dòng trống.
+  - **MD041**: Dòng đầu file nên là heading cấp 1 (`#`).
+  - **MD047**: File kết thúc bằng một dòng mới (newline).
+
+## 2. Dễ hiểu và đủ thông tin
+
+- **Cấu trúc rõ ràng**: Dùng heading phân cấp hợp lý, danh sách và bảng khi cần; có mục lục cho tài liệu dài.
+- **Đủ bối cảnh**: Mỗi phần/mục có mô tả ngắn hoặc câu dẫn; tránh chỉ liệt kê thuật ngữ không giải thích.
+- **Đủ thông tin**: Luồng xử lý, cấu hình, lỗi thường gặp được mô tả đủ để người mới hoặc người bảo trì hiểu và làm theo.
+- **Nhất quán**: Trong file tài liệu (`.md`) dự án **giữ tiếng Việt**; một ngôn ngữ trong cùng tài liệu; thuật ngữ kỹ thuật dùng thống nhất. (Comment và doc trong source `.rs` dùng tiếng Anh — xem `documentation.mdc`.)
+
+## Tóm tắt
+
+| Yêu cầu | Cách làm |
+|--------|----------|
+| Chuẩn markdownlint | Cấu hình `.markdownlint.json`, chạy lint, sửa hết cảnh báo/lỗi. |
+| Dễ hiểu | Cấu trúc rõ, có mô tả/bối cảnh, mục lục khi cần. |
+| Đủ thông tin | Luồng, cấu hình, lỗi thường gặp được mô tả đủ để đọc và vận dụng. |

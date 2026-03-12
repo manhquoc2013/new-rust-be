@@ -1,0 +1,249 @@
+---
+name: project
+description: Rules for Rust ETC Transaction Middleware project
+---
+
+# Project Rules
+
+## ⚠️ CRITICAL: Tuân Thủ Quy Tắc Project - BẮT BUỘC ĐẦU TIÊN
+
+**QUY TRÌNH BẮT BUỘC KHI AI TẠO MÃ HOẶC THỰC HIỆN THAY ĐỔI:**
+
+### Bước 1: ĐỌC TẤT CẢ RULE FILES TRƯỚC KHI BẮT ĐẦU
+
+**AI PHẢI ĐỌC VÀ HIỂU TẤT CẢ các rule files trong `.cursor/rules/` TRƯỚC KHI VIẾT BẤT KỲ DÒNG CODE NÀO:**
+
+1. **`project.mdc`** (file này):
+   - Quy tắc chung về cấu trúc project, version management, code structure
+   - Quy tắc về shared code, logic & functions, code style
+   - Quy tắc về testing và documentation
+
+2. **`logging.mdc`**:
+   - Quy ước logging với `tracing`: structured fields, prefix component `[Component]`
+   - Không dùng emoji, không `\n` trong message
+   - Mức log: error/warn/info/debug theo từng trường hợp
+
+3. **`documentation.mdc`**:
+   - Quy tắc viết doc/comment trong source: hợp lý, **tiếng Anh** cho mọi comment và doc trong file `.rs`, tránh dư thừa
+   - File tài liệu (`.md`) giữ tiếng Việt
+   - Khi nào cần doc, khi nào không cần
+
+4. **`doc-writing.mdc`** (khi viết/sửa file `.md`):
+   - Tài liệu Markdown: chuẩn markdownlint, dễ hiểu, đủ thông tin
+
+5. **`commit-messages.mdc`** (khi tạo hoặc gợi ý nội dung commit):
+   - Nội dung commit ngắn gọn theo gạch đầu dòng, khái quát đúng đủ thay đổi; dùng tiếng Việt
+
+**KHÔNG BAO GIỜ bỏ qua bước đọc rules. Đây là bước BẮT BUỘC đầu tiên.**
+
+### Bước 2: KIỂM TRA VÀ ÁP DỤNG QUY TẮC TRƯỚC KHI VIẾT CODE
+
+**Sau khi đã đọc rules, AI PHẢI kiểm tra và áp dụng các quy tắc trước khi viết code:**
+
+1. **Logging**:
+   - **Nội dung log (message) dùng tiếng Anh** (xem `.cursor/rules/logging.mdc` mục Language)
+   - Luôn dùng structured fields (`key = value`), không nhét vào message
+   - Luôn có prefix `[Component]` trong message (ví dụ: `[Kafka]`, `[DB]`, `[VETC]`)
+   - Không dùng emoji trong message, không `\n` ở cuối
+   - Error: một dòng duy nhất với đủ fields để trace
+
+2. **Documentation** (trong source `.rs`):
+   - Doc/comment trong code dùng **tiếng Anh**; file tài liệu (`.md`) giữ tiếng Việt
+   - Chỉ viết doc/comment hợp lý, tránh dư thừa, không comment code hiển nhiên
+   - Public APIs cần doc comments (`///`) bằng tiếng Anh
+
+3. **Code structure**:
+   - Đặt code đúng module/layer (configs, models, db/repositories, services, handlers, utils)
+   - Không tạo file/thư mục lệch quy ước
+   - Cập nhật `mod.rs` tương ứng
+
+4. **Shared code**:
+   - **Ưu tiên dùng** constants/utils/helpers/common có sẵn trước khi tạo hàm mới (rà soát `src/constants.rs`, `src/utils/`, `handlers/.../common.rs`).
+   - Kiểm tra code trùng trước khi viết → đưa ra constants/utils/helpers
+   - Tránh copy-paste, ưu tiên tái sử dụng
+
+### Bước 3: THỰC HIỆN THAY ĐỔI THEO QUY TẮC
+
+**KHI THỰC HIỆN BẤT KỲ THAY ĐỔI NÀO, AI PHẢI:**
+
+1. **Khi viết code mới hoặc sửa code**:
+   - Áp dụng quy tắc logging từ `logging.mdc` (structured fields, prefix `[Component]`, không emoji)
+   - Áp dụng quy tắc documentation từ `documentation.mdc` (doc/comment trong `.rs` bằng tiếng Anh, hợp lý, tránh dư thừa)
+   - Đặt code đúng module/layer theo cấu trúc project
+   - Kiểm tra code trùng → đưa ra constants/utils/helpers
+
+2. **Khi cập nhật tài liệu** (chỉ thực hiện **khi người dùng yêu cầu**):
+   - **Thời gian cập nhật cuối**: Mỗi khi AI sửa `FLOW_DOCUMENTATION.md`, **bắt buộc** lấy thời gian local hiện tại bằng cách **chạy lệnh** (ví dụ PowerShell: `[DateTime]::Now.ToString('yyyy-MM-dd HH:mm')`) rồi ghi giá trị đó vào dòng "**Cập nhật lần cuối**" ở cuối file. Không dùng thời gian cố định hay ước lượng; phải lấy thời gian thực từ hệ thống (local time) tại thời điểm sửa tài liệu.
+   - **Đồng bộ với code**: Trước khi cập nhật tài liệu, **luôn kiểm tra tất cả commit sau thời gian cập nhật lần cuối** (xem git log hoặc lịch sử thay đổi) để đảm bảo logic và tài liệu đồng bộ; rà soát thay đổi code, cập nhật mô tả luồng và changelog cho đúng, không bỏ sót.
+   - Đồng bộ phiên bản giữa `FLOW_DOCUMENTATION.md` và `Cargo.toml`
+   - Cập nhật changelog đầy đủ, không bỏ sót thay đổi
+   - Cập nhật phần "Phiên bản hiện tại" ở cuối file
+
+3. **Khi refactor hoặc tách code**:
+   - Kiểm tra xem có code trùng ở nơi khác không → đưa ra utils/helpers/constants
+   - Giữ backward compatibility nếu cần (re-export từ module cũ)
+   - Cập nhật tất cả imports và references
+
+4. **Khi thêm tính năng mới**:
+   - Xác định đúng layer (config/model/repository/service/handler/network/utils)
+   - Đặt code vào đúng module theo cấu trúc hiện tại
+   - Cập nhật `mod.rs` tương ứng
+   - Thêm logging theo quy ước (structured fields, prefix component)
+   - Thêm doc comments cho public APIs
+
+5. **Khi sửa lỗi hoặc tối ưu**:
+   - Đảm bảo không vi phạm quy tắc logging/documentation
+   - Không chủ động cập nhật tài liệu (chỉ cập nhật khi người dùng yêu cầu)
+   - Đảm bảo code vẫn tuân thủ project structure
+
+**KHÔNG BAO GIỜ:**
+
+- Bỏ qua bước đọc rules trước khi viết code
+- Viết code mà không kiểm tra logging/documentation conventions
+- Viết code mà không tuân thủ cấu trúc project (đặt sai module/layer)
+- Tạo hàm mới mà không rà soát/ưu tiên common/utils/helpers có sẵn
+- Copy-paste code thay vì đưa ra utils/helpers/constants
+- Cập nhật tài liệu (FLOW_DOCUMENTATION.md, changelog, v.v.) khi chưa có yêu cầu rõ ràng từ người dùng
+- Đặt code sai layer/module theo cấu trúc project
+- Vi phạm quy tắc logging (thiếu prefix, dùng emoji, nhét context vào message thay vì structured fields)
+- Vi phạm quy tắc documentation (doc/comment không dùng tiếng Anh trong `.rs`, dư thừa, comment code hiển nhiên)
+
+**TÓM TẮT WORKFLOW BẮT BUỘC:**
+
+1. ✅ **ĐỌC** tất cả rule files trong `.cursor/rules/` (project.mdc, logging.mdc, documentation.mdc; thêm doc-writing.mdc khi viết/sửa file .md; thêm commit-messages.mdc khi tạo/gợi ý nội dung commit)
+2. ✅ **KIỂM TRA** quy tắc áp dụng cho task hiện tại
+3. ✅ **ÁP DỤNG** quy tắc khi viết code (logging, documentation, structure, shared code)
+4. ✅ **XÁC MINH** code tuân thủ tất cả quy tắc trước khi hoàn tất
+
+---
+
+## Version Management
+
+**CRITICAL**: Khi cập nhật phiên bản trong tài liệu (`FLOW_DOCUMENTATION.md`), **PHẢI** đồng bộ phiên bản trong `Cargo.toml`:
+
+**AI PHẢI KIỂM TRA VÀ ĐỒNG BỘ VERSION TRƯỚC KHI HOÀN TẤT TASK:**
+
+1. **Khi thêm entry mới vào changelog** trong `FLOW_DOCUMENTATION.md`:
+   - Kiểm tra phiên bản hiện tại trong `Cargo.toml` (field `version` trong `[package]`)
+   - Nếu phiên bản trong changelog mới hơn phiên bản trong `Cargo.toml`, **PHẢI** cập nhật `Cargo.toml` để đồng bộ
+   - Format: `version = "X.Y.Z"` (ví dụ: `version = "0.1.4"`)
+
+2. **Khi cập nhật phiên bản trong `Cargo.toml`**:
+   - Đảm bảo có entry tương ứng trong changelog của `FLOW_DOCUMENTATION.md`
+   - Cập nhật dòng "**Phiên bản hiện tại**" ở cuối file tài liệu
+
+3. **Quy tắc đặt tên phiên bản**:
+   - Format: `MAJOR.MINOR.PATCH` (Semantic Versioning)
+   - MAJOR: Thay đổi lớn, breaking changes
+   - MINOR: Thêm tính năng mới, backward compatible
+   - PATCH: Sửa lỗi, cập nhật tài liệu, cải thiện nhỏ
+
+4. **Lịch sử phiên bản (changelog)**:
+   - **Bắt buộc lấy từ git**: Phần changelog của phiên bản mới **phải** lấy đầy đủ lịch sử thay đổi trong git **từ lần cập nhật tài liệu cuối** (ví dụ: `git log <commit-cập-nhật-tài-liệu-cuối>..HEAD` hoặc tương đương). Không chỉ dựa vào một vài commit gần nhất hay ước lượng; phải rà soát toàn bộ commit trong khoảng đó và ghi đủ thay đổi vào changelog.
+   - Khi thêm hoặc sửa entry changelog cho một phiên bản: **so sánh mã nguồn (src) tại thời điểm hiện tại với trạng thái build của phiên bản trước đó** (ví dụ commit hoặc tag tương ứng version trước) để xác định thay đổi thực tế (tính năng, sửa lỗi, refactor, cấu hình, v.v.), rồi ghi vào changelog.
+   - **Chỉ ghi thay đổi nội dung**: Liệt kê thay đổi code/logic/cấu hình có ý nghĩa; **không** ghi các mục meta như "cập nhật tài liệu", "cập nhật phiên bản", "đồng bộ Cargo.toml" vào changelog.
+   - Không bỏ sót thay đổi đáng kể; mỗi thay đổi (logic, API, cấu hình) phải có mục tương ứng.
+   - **Format mô tả**: Mỗi phiên bản được mô tả bằng **danh sách gạch đầu dòng** (bullet list). Mỗi ý thay đổi là một gạch đầu dòng riêng.
+   - Người đọc phải hiểu được phiên bản mới **khác phiên bản trước ở đâu** (so sánh dựa trên diff src, không dựa trên mô tả chung chung).
+
+5. **Git tag theo version và build number**:
+   - **Chỉ đánh tag** (hoặc gợi ý tạo tag) **khi người dùng yêu cầu** — không tự động tạo tag mỗi lần commit.
+   - **Format tag**: `{version}-{build_number}` — ví dụ version trong `Cargo.toml` là `0.2.3` thì tag: `0.2.3-1`, `0.2.3-2`, …
+   - **version**: lấy từ `[package]` → `version` trong `Cargo.toml` (format `X.Y.Z`).
+   - **build_number**: số thứ tự tăng dần **chỉ cho cùng version đó**. **Khi tăng version** trong `Cargo.toml` (vd. 0.2.3 → 0.2.4), **reset build number** — version mới bắt đầu lại từ `0.2.4-1`. Tính bằng cách xem các tag hiện có dạng `{version}-*`, lấy số lớn nhất rồi cộng 1 (chưa có tag nào thì dùng `1`).
+   - **AI**: khi người dùng yêu cầu tạo/đánh tag version-build thì gợi ý hoặc chạy script `scripts/next-version-tag.ps1` (xem `scripts/README.md`).
+
+## General Guidelines
+
+- Ưu tiên viết code an toàn, hiệu quả, dễ bảo trì
+- Sử dụng Rust best practices: ownership, borrowing, error handling
+- Async/await với Tokio cho I/O operations
+- Structured logging với `tracing` (theo quy ước trong `.cursor/rules/logging.mdc`)
+
+## Shared Code (commons / utils / helpers / constants)
+
+**BẮT BUỘC: Ưu tiên common / utils / helpers trước khi tạo hàm mới**
+
+- **Trước khi viết hàm hoặc logic mới**, AI **PHẢI**:
+  1. **Rà soát** `src/constants.rs`, `src/utils/` (helpers, epoch_datetime, request_id, ticket_id), và `handlers/.../common.rs` (checkin, commit, rollback) xem đã có hàm/constant tương đương chưa.
+  2. **Ưu tiên gọi** hàm/constant có sẵn thay vì viết lại (ví dụ: chuỗi trim null + space → `crate::utils::normalize_etag`; thời gian DB → `now_utc_db_string`, `timestamp_ms`, `format_datetime_utc_db`; env bool → `parse_env_bool_loose`; wrap encrypted reply → `wrap_encrypted_reply`; format hex log → `format_bytes_hex`).
+  3. **Chỉ tạo hàm mới** khi không có sẵn và logic thực sự dùng chung; khi tạo thì đặt đúng module (utils hoặc common theo phạm vi).
+
+**AI PHẢI KIỂM TRA CODE TRÙNG TRƯỚC KHI VIẾT:**
+
+- **Khi các hàm hoặc biến được dùng chung** (trùng lặp ở 2+ nơi hoặc có ý nghĩa dùng lại), **PHẢI** đưa ra module dùng chung để tái sử dụng:
+  - **constants** (`src/constants.rs` hoặc submodule): hằng số, command IDs, ngưỡng, sentinel values (ví dụ: `SESSION_ID_NONE`, `HANDSHAKE_TIMEOUT_RECONNECT_THRESHOLD`).
+  - **utils** (`src/utils/`): hàm tiện ích dùng chung (format hex, wrap encrypt, generate request_id, …).
+  - **helpers**: hàm helper theo domain có thể nằm trong `utils` hoặc `handlers/.../common.rs` tùy phạm vi (ví dụ: map TCD → DTO, normalize station type).
+  - **commons**: logic/type dùng chung giữa nhiều handler hoặc client (ví dụ: `handlers/checkin/common.rs`, `handlers/commit/common.rs`).
+- Tránh copy-paste cùng một logic/hằng số; ưu tiên một nơi định nghĩa, nơi khác gọi qua `crate::constants::*`, `crate::utils::*` hoặc `super::common::*`.
+
+## Đồng bộ dữ liệu BECT (chỉ BECT)
+
+- Hệ thống chỉ xử lý luồng **BECT** (TRANSPORT_TRANSACTION_STAGE). Các trường (CHECKIN_PLATE_STATUS, CHECKOUT_PLATE, STATUS, TOLL_TYPE, RATING_TYPE, …) được ghi đúng tại từng bước checkin, commit checkin, checkout, commit checkout.
+- Khi thêm hoặc sửa trường trong luồng BECT (handler checkin/commit, repository `transport_transaction_stage`): cập nhật đủ tại checkin, commit checkin, checkout, commit checkout.
+
+## FE response
+
+- **fe_resp.status** luôn được gán từ kết quả xử lý: khi handler xử lý xong (BECT commit/checkin/rollback), gán `fe_resp.status` từ response hoặc mã nghiệp vụ tương ứng. Các nhánh lỗi (timeout, parse fail) gán `fe_resp.status = -1` hoặc mã lỗi phù hợp.
+
+## Project Structure
+
+**AI PHẢI KIỂM TRA CẤU TRÚC TRƯỚC KHI TẠO FILE/CODE MỚI:**
+
+- **Tạo đúng cấu trúc dữ liệu và chức năng theo cấu trúc của dự án**: khi thêm code mới, **PHẢI** đặt đúng module/layer đã có, không tạo file hoặc thư mục lệch quy ước.
+- **Gợi ý vị trí**:
+  - **configs**: cấu hình (DB, Kafka, app), pool factory.
+  - **constants**: hằng số protocol, lane type, network (command ID, ngưỡng, sentinel).
+  - **models**: struct message/ETDR/TCOC, VDTC/VETC, TollCache.
+  - **db/repositories**: entity + repository (truy vấn DB), mapper; mỗi bảng/entity một file trong `repositories/`.
+  - **services**: business logic gọi repository/cache, không xử lý I/O socket trực tiếp.
+  - **handlers**: xử lý request/response FE (connect, handshake, checkin, commit, rollback, terminate); mỗi flow có thư mục con (vd. `checkin/`, `commit/`) với `common.rs` và handler BECT; roaming helper (direction I/O từ lane).
+  - **network**: server, connection (I/O socket, message queue).
+  - **cache**: config (moka, keydb, prefix) và data (toll, price, subscription_history, …), DTO trong `cache/data/dto/`.
+  - **utils**: hàm tiện ích dùng chung (helpers, request_id).
+  - **crypto**, **logging**, **logic**, **types**: theo đúng vai trò hiện tại của từng module.
+- Khi thêm tính năng mới: xác định layer (config / model / repository / service / handler / network) rồi đặt code vào đúng chỗ; cập nhật `mod.rs` tương ứng.
+
+## File Size & Refactoring
+
+- **Ngưỡng khuyến nghị**: Mỗi file nguồn (`.rs`) **không nên vượt quá ~600–800 dòng**. File **trên ~1000 dòng** nên được rà soát và tách khi logic phức tạp.
+- **Khi nào tách file**:
+  - Một file chứa nhiều nhóm chức năng rõ ràng (vd: serialization, mapping, handler) → tách thành module con (thư mục với `mod.rs` + các file con).
+  - Handler theo protocol (vd: checkin/bect, commit/bect) có thể có: `messages.rs` (build/parse message), mapping riêng, `handler.rs` (entry point), `mod.rs` (re-export `handle_*`).
+  - Giữ **backward compatibility**: module cha re-export entry point (vd. `pub use handler::handle_bect_checkin`) để code gọi từ handler không đổi.
+- **Sau khi tách**: Cập nhật `mod.rs` tương ứng, đảm bảo `cargo build` và `cargo clippy` pass.
+- **Đã tách (module con)**: `models/ETDR` → `ETDR/mod.rs` + types_impl, cache, sync; `services/kafka_producer_service` → thư mục service + types. **File còn nặng (tách khi có thời gian)**: `network/server.rs`, `db/repositories/transport_transaction_stage.rs`. Tách theo nhóm chức năng rõ ràng, giữ re-export trong `mod.rs`.
+
+## Logic & Functions
+
+- **Khi thêm logic mới, nên chia thành các hàm nhỏ** để dễ xử lý và bảo trì:
+  - Mỗi hàm làm một việc rõ ràng; tránh hàm quá dài (nhiều chục dòng) gộp nhiều bước.
+  - Tách bước validate, parse, gọi service, build response thành hàm riêng khi logic phức tạp.
+  - Đặt tên hàm mô tả đúng nhiệm vụ (vd. `parse_connect_request`, `build_checkin_resp`, `validate_session`).
+  - Hàm nhỏ dễ unit test và sửa lỗi hơn; thuận lợi khi refactor hoặc tái sử dụng.
+
+## Code Style
+
+- Sử dụng `cargo fmt` để format code
+- Sử dụng `cargo clippy` để kiểm tra warnings
+- Document public APIs với doc comments (`///`) bằng tiếng Anh
+- Error handling: Sử dụng `Result<T, Box<dyn Error + Send + Sync>>` cho async functions
+
+## Testing
+
+- Unit tests cho các functions quan trọng
+- Integration tests cho các handlers và network clients
+- Test với các edge cases và error scenarios
+
+## Documentation
+
+**Chỉ cập nhật tài liệu khi người dùng yêu cầu.** Không chủ động sửa `FLOW_DOCUMENTATION.md`, changelog hay file tài liệu khác chỉ vì code đã thay đổi.
+
+- **Khi người dùng yêu cầu cập nhật tài liệu** (hoặc khi đang viết/sửa file .md theo yêu cầu):
+  - Viết **chuẩn theo markdownlint** (dùng cấu hình `.markdownlint.json` trong project; chạy `npx markdownlint-cli "**/*.md"` để kiểm tra).
+  - Nội dung **dễ hiểu** và **đủ thông tin**: cấu trúc rõ ràng (heading, danh sách, bảng), mô tả đầy đủ cho người đọc, tránh thiếu bối cảnh hoặc mơ hồ.
+  - **Khi sửa `FLOW_DOCUMENTATION.md`**: cập nhật mô tả luồng/changelog cho đúng với code; thêm entry changelog khi cần; đồng bộ phiên bản với `Cargo.toml`; cập nhật "Phiên bản hiện tại" và "Cập nhật lần cuối" (lấy thời gian local bằng lệnh, ví dụ PowerShell `[DateTime]::Now.ToString('yyyy-MM-dd HH:mm')`).
+  - **Lịch sử phiên bản**: phần changelog **PHẢI** phản ánh đúng đủ tất cả thay đổi kể từ lần cập nhật trước (xem mục Version Management). **KHÔNG được bỏ sót thay đổi.** Mỗi phiên bản mô tả bằng **danh sách gạch đầu dòng** (một ý = một gạch đầu dòng), không gộp thành một dòng.
+  - **Đồng bộ logic – tài liệu**: Kiểm tra commit sau thời gian cập nhật lần cuối để rà soát thay đổi code và cập nhật mô tả cho đúng.
+- Document/comment trong source (file `.rs`): **PHẢI** tuân thủ rule **documentation.mdc** — dùng **tiếng Anh**, viết hợp lý, tránh dư thừa; file tài liệu (`.md`) giữ tiếng Việt

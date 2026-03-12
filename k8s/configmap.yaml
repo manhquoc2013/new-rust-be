@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rust-core-transaction-config
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+data:
+  # Application configuration (non-sensitive only)
+  # SECURITY: Sensitive data (passwords, keys) should be in Secrets, not ConfigMap
+  # BẢO MẬT: Dữ liệu nhạy cảm (passwords, keys) nên ở Secrets, không phải ConfigMap
+  port-listen: "9001"
+  boox1-prefix-list: "3416214B94,89301100013"
+  boox2-prefix-list: "3416214B88,89301100013"
+  
+  # VDTC connection configuration (non-sensitive only)
+  vdtc-host: "vdtc-server.example.com"
+  vdtc-port: "8300"
+  delay-time-reconnect-vdtc: "5"
+  
+  # Cache System configuration
+  cache-reload-interval-seconds: "300"
+  # Note: KEYDB_URL contains credentials, should be in Secret
+  # Lưu ý: KEYDB_URL chứa credentials, nên ở Secret
+
+  # Kafka (optional): set kafka-bootstrap-servers to enable checkin/checkout events to HUB
+  # Để tắt Kafka: xóa kafka-bootstrap-servers hoặc để rỗng
+  kafka-bootstrap-servers: ""  # e.g. "kafka-broker:9092" to enable
+  kafka-topic-checkin: "topics.hub.trans.checkin"
+  kafka-topic-checkout: "topics.hub.trans.checkout"
+  kafka-data-version: "1.0"
+  kafka-queue-capacity: "10000"
+  kafka-send-batch-size: "50"
+  kafka-retries: "10"
+  kafka-request-timeout-ms: "5000"
+  kafka-retry-initial-delay-ms: "1000"
+  kafka-retry-max-delay-ms: "60000"
+
+  # HA: Kafka consumer CHECKIN_HUB_INFO — chỉ một pod consume nhờ leader lock KeyDB
+  # Bật consumer: kafka-consumer-enabled=true và set kafka-bootstrap-servers
+  kafka-topic-checkin-hub-online: "topics.hub.checkin.trans.online"
+  kafka-consumer-enabled: "true"
+  kafka-consumer-leader-lock-key: "kafka_consumer_leader"
+  kafka-consumer-leader-lock-ttl-secs: "60"

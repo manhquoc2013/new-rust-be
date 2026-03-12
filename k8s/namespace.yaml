@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rust-core-transaction
+  labels:
+    name: rust-core-transaction
+    app: rust-core-transaction
+    # Security: Isolated namespace prevents resource conflicts and improves security
+    # Tách biệt namespace để tránh xung đột tài nguyên và cải thiện bảo mật
+    security: "isolated"
+    # Pod Security Standards: Enforce restricted security policies
+    # Pod Security Standards: Áp dụng các chính sách bảo mật restricted
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    # Version of the policy being enforced
+    # Phiên bản của policy đang được áp dụng
+    pod-security.kubernetes.io/version: "latest"

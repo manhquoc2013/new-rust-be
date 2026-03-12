@@ -1,0 +1,106 @@
+# NetworkPolicy: Controls network traffic to and from pods
+# NetworkPolicy: Kiểm soát lưu lượng mạng đến và đi từ pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rust-core-transaction-netpol
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+    security: "network-isolated"
+spec:
+  # Apply this policy to pods with this label
+  # Áp dụng policy này cho pods có label này
+  podSelector:
+    matchLabels:
+      app: rust-core-transaction
+  
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  # Ingress rules: Define what traffic is allowed TO the pods
+  # Ingress rules: Định nghĩa lưu lượng nào được phép ĐẾN pods
+  ingress:
+    # Allow traffic from the same namespace (for service communication)
+    # Cho phép lưu lượng từ cùng namespace (để giao tiếp service)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: rust-core-transaction
+        - podSelector:
+            matchLabels:
+              app: rust-core-transaction
+      ports:
+        - protocol: TCP
+          port: 9001
+    
+    # Allow traffic from kube-system (for monitoring, logging, etc.)
+    # Cho phép lưu lượng từ kube-system (cho monitoring, logging, etc.)
+    # Uncomment if needed:
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           name: kube-system
+    #   ports:
+    #     - protocol: TCP
+    #       port: 9001
+    
+    # Allow traffic from specific namespaces if needed
+    # Cho phép lưu lượng từ các namespace cụ thể nếu cần
+    # Example:
+    # - from:
+    #     - namespaceSelector:
+    #         matchLabels:
+    #           name: monitoring
+    #   ports:
+    #     - protocol: TCP
+    #       port: 9001
+  
+  # Egress rules: Define what traffic is allowed FROM the pods
+  # Egress rules: Định nghĩa lưu lượng nào được phép TỪ pods
+  egress:
+    # Allow DNS resolution (required for Kubernetes DNS)
+    # Cho phép phân giải DNS (bắt buộc cho Kubernetes DNS)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow traffic to the same namespace
+    # Cho phép lưu lượng đến cùng namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: rust-core-transaction
+        - podSelector:
+            matchLabels:
+              app: rust-core-transaction
+      ports:
+        - protocol: TCP
+          port: 9001
+    
+    # Allow outbound traffic to VDTC/VETC servers (adjust ports as needed)
+    # Cho phép lưu lượng ra ngoài đến các server VDTC/VETC (điều chỉnh ports nếu cần)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 8300  # VDTC port
+        # Add other ports as needed
+        # Thêm các ports khác nếu cần
+        # - protocol: TCP
+        #   port: 8301  # VETC port
+    
+    # Allow Redis/KeyDB access if needed
+    # Cho phép truy cập Redis/KeyDB nếu cần
+    # - to: []
+    #   ports:
+    #     - protocol: TCP
+    #       port: 6379  # Redis default port
+    #     - protocol: TCP
+    #       port: 30222  # KeyDB port from config

@@ -1,0 +1,37 @@
+[package]
+name = "Rust-core-transaction"
+version = "0.2.5"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+once_cell = "1.18"
+bytes = "1.11.0"
+dotenvy = "0.15"
+cbc = { version = "0.1", features = ["alloc"] }
+aes = "0.8"
+r2d2 = "0.8.10"
+odbc-api = "14.1.0"
+chrono = "0.4"
+hex = "0.4"
+async-trait = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "time", "ansi", "chrono"] }
+tracing-appender = "0.2"
+moka = { version = "0.12", features = ["future"] }
+redis = { version = "0.32", features = ["tokio-comp", "aio", "connection-manager"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha1 = "0.10"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+base64 = "0.22"
+socket2 = { version = "0.5", features = ["all"] }
+nix = { version = "0.27", features = ["net"] }
+libc = "0.2"
+uuid = { version = "1", features = ["v4", "serde"] }
+rskafka = "0.6"
+rsasl = { version = "2.2.1", default-features = false, features = ["config_builder", "scram-sha-1", "scram-sha-2", "anonymous", "external", "oauthbearer", "xoauth2", "plain", "login"] }
+parking_lot = "0.12"
+get_if_addrs = "0.5"
+dashmap = "6"

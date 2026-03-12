@@ -1,0 +1,59 @@
+# Role: Defines what actions can be performed on which resources
+# Role: Định nghĩa các hành động có thể thực hiện trên tài nguyên nào
+# NOTE: This Role is a defensive measure. The application doesn't actually use Kubernetes API.
+# LƯU Ý: Role này là biện pháp phòng thủ. Ứng dụng không thực sự sử dụng Kubernetes API.
+# Service account token automount is disabled, so this Role won't be used unless explicitly enabled.
+# Service account token automount đã bị vô hiệu hóa, nên Role này sẽ không được sử dụng trừ khi được bật rõ ràng.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rust-core-transaction-role
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+    security: "rbac-enabled"
+rules:
+  # Allow reading ConfigMaps in the same namespace
+  # Cho phép đọc ConfigMaps trong cùng namespace
+  # Note: Currently unused since automountServiceAccountToken is false
+  # Lưu ý: Hiện tại không được sử dụng vì automountServiceAccountToken là false
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["rust-core-transaction-config"]
+    verbs: ["get", "list"]
+  
+  # Allow reading Secrets in the same namespace
+  # Cho phép đọc Secrets trong cùng namespace
+  # Note: Currently unused since automountServiceAccountToken is false
+  # Lưu ý: Hiện tại không được sử dụng vì automountServiceAccountToken là false
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["rust-core-transaction-secrets"]
+    verbs: ["get", "list"]
+  
+  # Note: If the application needs to read other resources, add them here
+  # Lưu ý: Nếu ứng dụng cần đọc các tài nguyên khác, thêm vào đây
+  # Example: If app needs to read endpoints
+  # - apiGroups: [""]
+  #   resources: ["endpoints"]
+  #   verbs: ["get", "list"]
+
+---
+# RoleBinding: Binds the Role to the ServiceAccount
+# RoleBinding: Gán Role cho ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rust-core-transaction-rolebinding
+  namespace: rust-core-transaction
+  labels:
+    app: rust-core-transaction
+    security: "rbac-enabled"
+subjects:
+  - kind: ServiceAccount
+    name: rust-core-transaction-sa
+    namespace: rust-core-transaction
+roleRef:
+  kind: Role
+  name: rust-core-transaction-role
+  apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,157 @@
+---
+name: logging
+description: Quy ước logging thống nhất - dễ đọc, dễ trace
+globs: **/*.rs
+---
+
+# Logging Convention
+
+Mọi log trong project dùng `tracing` (info, warn, error, debug) theo quy ước sau.
+
+## 0. Ngôn ngữ (Language)
+
+- **Log message content MUST be in English.** (Nội dung message trong log phải dùng tiếng Anh.)
+- Use English for all `tracing::info!`, `tracing::warn!`, `tracing::error!`, `tracing::debug!` message strings so that logs are consistent, grep-friendly, and usable in international environments.
+- Code comments and documentation use **English** per `documentation.mdc`; **log message text** is also English.
+
+## 1. Format chuẩn
+
+- **Structured fields**: Ưu tiên đưa context vào field, không nhét vào message.
+- **Message ngắn**: Một cụm rõ ràng, có prefix component.
+- **Không xuống dòng thừa**: Không dùng `\n` ở cuối message.
+- **Không emoji trong message**: Bỏ ✅❌⚠️🔍📦 trong nội dung log (file log dễ grep/parse).
+
+```rust
+// Đúng
+tracing::info!(request_id = fe_commit.request_id, transport_trans_id, "[VETC] processing commit");
+tracing::error!(request_id = r, error = %e, "[DB] TRANSPORT_TRANSACTION_STAGE save failed");
+
+// Sai
+tracing::info!("[{}] ✅ Processing commit (request_id={})\n", request_id, request_id);
+tracing::error!("❌ Failed: {}", e);
+tracing::error!("   → Detail 1");
+tracing::error!("   → Detail 2");
+```
+
+## 2. Prefix component
+
+Mỗi message có prefix trong ngoặc vuông để lọc nhanh:
+
+| Prefix   | Ý nghĩa                    |
+|----------|-----------------------------|
+| `[Kafka]`| Kafka producer, queue, send |
+| `[DB]`   | Repository, service DB      |
+| `[VETC]` | Handler VETC (commit/checkin)|
+| `[VDTC]` | Handler VDTC                |
+| `[BECT]` | Handler BECT                |
+| `[Cache]`| Cache load/reload           |
+| `[STARTUP]` | Khởi động ứng dụng       |
+| `[Network]` | Boo client, server, router |
+| `[LogCleanup]` | Cleanup log cũ, rotation |
+
+## 3. Fields thường dùng (để trace)
+
+- `request_id` – Mã giao dịch request.
+- `transport_trans_id` – ID bản ghi transport.
+- `etag` – Số thẻ (Display: `etag = %etag`).
+- `error` – Lỗi (Display: `error = %e` hoặc `error = %error_msg`).
+- `topic`, `records`, `attempt` – Kafka.
+- `toll_id`, `lane_id`, `lane_code` – Trạm/làn.
+
+Dùng `%` cho Display (string), `?` cho Debug khi cần.
+
+## 3.1. Standard trace fields (bắt buộc khi có sẵn)
+
+Mọi log liên quan giao dịch **phải** có đủ ba nhóm sau **nằm trong nội dung log (message)** và **được bọc bằng dấu []**:
+
+- **`[ticket_id]` hoặc `[transport_trans_id]` hoặc `[record_id]`** – ID bản ghi giao dịch (dùng một trong ba tùy ngữ cảnh).
+- **`[etag]`** – Số thẻ.
+- **`[request_id]`** – Mã request/giao dịch.
+
+**Format trong nội dung log:** ba nhóm xuất hiện theo thứ tự `[id] [etag] [request_id]` ở đầu message (hoặc ngay sau prefix component). Khi không có giá trị dùng `-` trong ngoặc. Ví dụ:
+
+```rust
+// Đúng: các field nằm trong message, có [] bao lại
+let ids = crate::utils::log_trace_ids(fe_checkin.request_id, Some(transport_trans_id), Some(fe_checkin.etag.trim()));
+tracing::debug!(request_id = fe_checkin.request_id, transport_trans_id, etag = %fe_checkin.etag.trim(), "{} [VETC] CHECKIN step finished", ids);
+// Output: "[123] [etag_val] [456] [VETC] CHECKIN step finished"
+
+// Khi chưa có transport_trans_id (đầu handler):
+let ids = crate::utils::log_trace_ids(fe_checkin.request_id, None, Some(fe_checkin.etag.trim()));
+tracing::debug!(request_id = fe_checkin.request_id, etag = %fe_checkin.etag.trim(), "{} [VETC] CHECKIN handler entered", ids);
+// Output: "[-] [etag_val] [456] [VETC] CHECKIN handler entered"
+```
+
+Vẫn giữ **structured fields** (request_id, transport_trans_id, etag) để grep; đồng thời **nội dung message** phải chứa ba nhóm có [] như trên. Dùng helper `crate::utils::log_trace_ids(request_id, transport_trans_id_or_ticket_id, etag)` để tạo chuỗi `[id] [etag] [request_id]` rồi đưa vào message.
+
+## 4. Mức log
+
+- **error**: Lỗi cần xử lý; một dòng kèm field đủ để trace. Dùng khi giao dịch/request thất bại hoặc dữ liệu mất (DB save failed, Kafka send failed, record not found không thể tiếp tục).
+- **warn**: Cảnh báo, fallback; không spam nhiều dòng. Dùng khi có degraded behavior nhưng vẫn xử lý được (fallback by etag, retry exceeded dùng fallback, cache load failed giữ cache cũ).
+- **info**: Luồng chính (batch, send, commit bắt đầu/kết thúc). Dùng cho sự kiện ít xảy ra hoặc điểm mốc quan trọng: startup/shutdown, "processing commit", "CHECKIN commit updated", task started/ended. Tránh info cho mỗi request (ví dụ "handler entered" mỗi checkin → dùng **debug**).
+- **debug**: Chi tiết (struct, bytes, cache hit, retry từng bước). Dùng cho mọi thao tác lặp theo request: handler entered, cache hit, stage found, từng bước retry, resp/reply.
+
+## 4.1. Hiệu năng (Performance)
+
+- **Mặc định `LOG_LEVEL=info`**: Các event `debug!` không được ghi vào file chính → ít ảnh hưởng I/O. Vẫn có chi phí nhỏ (gọi macro, kiểm tra level) nhưng không format/ghi khi level tắt.
+- **Luồng ghi**: Mỗi file có một worker thread duy nhất → không chồng chéo dòng. Mỗi event = một dòng (có newline) → **grep/tail** theo dòng hoạt động bình thường. Queue lớn + lossy=false → lưu đủ log. File mở append, không khóa độc quyền; flush mỗi 64KB → tail/grep thấy dữ liệu khi file đang ghi trên mọi môi trường (Unix/Windows).
+- **File theo level**: Mỗi level có một file chung: `rct-{error|warn|info|debug|trace}-{node_id}.log` trong thư mục ngày (YYYY-MM-DD). Mọi process type (VETC/VDTC/BETC/Local) ghi chung vào cùng file theo level. Mỗi dòng log có **thread id** và **thread name**.
+- **Rotation**: Theo ngày (thư mục mới mỗi ngày) và theo dung lượng file (LOG_MAX_FILE_SIZE). **Không giới hạn số file rotate** mỗi ngày. File cũ hơn LOG_RETENTION_DAYS bị cleanup task xóa.
+
+## 4.2. Khi nào log / file có thể mất (When logs or files can be lost)
+
+- **init_logging chỉ gọi một lần**: Nếu gọi lại (ví dụ test), subscriber đã init rồi; guards cũ bị thay → worker threads cũ thoát → log còn trong queue có thể mất. Trong production chỉ gọi init_logging một lần lúc startup.
+- **Đĩa đầy (ENOSPC)**: Ghi file lỗi → worker có thể dừng → log mới ở level đó có thể không ghi được cho đến khi giải phóng dung lượng và restart app. Cần monitor dung lượng đĩa và LOG_DIR.
+- **Quyền ghi (permission denied)**: Tương tự đĩa đầy; đảm bảo process có quyền ghi vào LOG_DIR và thư mục ngày (YYYY-MM-DD) được tạo bên trong.
+- **Cleanup chỉ xóa theo ngày cũ**: Task cleanup chỉ xóa cả thư mục ngày có tên **nhỏ hơn** (cutoff = now - LOG_RETENTION_DAYS). Không bao giờ xóa thư mục ngày hiện tại hoặc file đang ghi. File đang ghi luôn nằm trong thư mục ngày hiện tại.
+- **Rotation theo size**: Trước khi truncate file hiện tại, luôn sync + copy sang file rotated; nếu copy lỗi thì **không** truncate → không mất dữ liệu. Lỗi rotation được in ra stderr ([LogRotation] failed to copy...).
+- **Qua đêm (day rollover)**: Writer kiểm tra ngày mỗi lần ghi (và mỗi 64KB); log sau 00:00 sẽ ghi vào file ngày mới ngay ở lần ghi tiếp theo, không chờ đủ 64KB.
+- **Re-open khi lỗi ghi**: Nếu `write` hoặc `flush` trả lỗi IO (file handle hỏng, đĩa đầy tạm thời, v.v.), writer đóng handle hiện tại và in stderr `[LogWriter] ... will re-open on next write`. Lần ghi tiếp theo sẽ gọi `ensure_file_for_today()` và mở lại file (best-effort). Không cần gọi lại `init_logging`; nếu đĩa vẫn đầy hoặc quyền vẫn lỗi thì re-open vẫn fail.
+
+## 5. Lỗi (error)
+
+- Một dòng duy nhất: message + các field (request_id, transport_trans_id, error, ...).
+- Full entity / stack chỉ khi cần: dùng `tracing::debug!(entity = ?entity, ...)` sau dòng error.
+
+## 6. Trace nhanh (grep)
+
+- Theo giao dịch: `grep "request_id=12345" logs/YYYY-MM-DD/*.log`
+- Theo Kafka: `grep "\[Kafka\]" logs/YYYY-MM-DD/*.log`
+- Lỗi DB: `grep "\[DB\].*failed" logs/YYYY-MM-DD/*error*.log`
+- Theo transport: `grep "transport_trans_id=67890" logs/YYYY-MM-DD/*.log`
+- Theo etag: `grep "etag=ABC123" logs/YYYY-MM-DD/*.log`
+
+## 6.1. Trace khi có issue (workflow)
+
+1. **Lấy identifier**: Từ user/báo lỗi lấy `request_id`, `transport_trans_id`, hoặc `etag`.
+2. **Grep theo identifier**: `grep "request_id=<id>" logs/YYYY-MM-DD/*.log` (hoặc chỉ file error: `*-error-*.log`).
+3. **Xem chuỗi log theo thời gian**: Log đã có timestamp (RFC3339); sort theo thời gian để đọc trình tự xử lý.
+4. **Lọc theo component**: Nếu nghi ngờ Kafka/DB: `grep "\[Kafka\]"` hoặc `grep "\[DB\]"` trong cùng file đã grep ở bước 2.
+5. **Error log**: Mỗi dòng error có đủ field (request_id, transport_trans_id, error); không cần gộp nhiều dòng.
+
+## 7. Khi thêm log mới
+
+- **Message phải bằng tiếng Anh** (log content in English).
+- Luôn dùng **structured fields** (key = value) thay vì nhét vào message.
+- Luôn có **prefix** `[Component]` trong message.
+- Không dùng emoji trong message; không `\n` ở cuối.
+- Lỗi: một dòng, đủ field để trace (request_id, transport_trans_id, error).
+- Chi tiết debug (entity, SQL dài) chỉ trong `tracing::debug!`.
+
+## 8. Files đã chuẩn hóa theo quy ước
+
+- `src/main.rs` – Kafka init, STARTUP, BOO1/BOO2, shutdown; eprintln (init fail, panic) dùng prefix [STARTUP]
+- `src/logging/file_logger.rs`, `cleanup.rs`, `rotation.rs` – [STARTUP], [LogCleanup], không emoji
+- `src/db/mapper.rs`, `src/services/tcoc_connection_server_service.rs` – [DB], structured fields
+- `src/services/kafka_producer_service/` (service.rs, types.rs), `transport_transaction_stage_service.rs`, `boo_transport_trans_stage_service.rs`
+- `src/services/toll_fee/` (service, segment, flow, direct_price, detail, helpers, types, error), `route_graph.rs`, `tcoc_request_service.rs`, `tcoc_session_service.rs`, `tcoc_response_service.rs`, `tcoc_user_service.rs`
+- `src/db/repositories/transport_transaction_stage.rs`, `boo_transport_trans_stage.rs`, `transport_trans_stage_tcd.rs`, `boo_trans_stage_tcd.rs`, `tcoc_request.rs`, `tcoc_response.rs`, `tcoc_sessions.rs`, `repository.rs`
+- `src/handlers/commit/common.rs`, `mod.rs`, `vetc/`, `vdtc/`, `bect/`
+- `src/handlers/checkin/mod.rs`, `common.rs`, `vdtc/`, `vetc/`, `bect.rs`
+- `src/handlers/rollback/*`, `src/handlers/processor.rs`
+- `src/handlers/connect.rs`, `handshake.rs`, `terminate.rs`
+- `src/cache/data/*` (cache_reload, subscription_history_cache, toll_fee_list_cache, price_cache, toll_cycle_cache, toll_cache, toll_lane_cache)
+- `src/cache/config/*` (moka_cache.rs, cache_manager.rs, keydb.rs)
+- `src/configs/pool_factory.rs`, `src/logic/handler.rs`
+- `src/models/ETDR/` (mod.rs, types_impl.rs, cache.rs, sync.rs), `src/models/TollCache.rs`
+- `src/network/boo2_client.rs`, `src/network/boo1_client.rs`, `src/network/server.rs`, `src/network/router.rs`

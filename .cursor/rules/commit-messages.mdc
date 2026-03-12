@@ -1,0 +1,81 @@
+---
+name: commit-messages
+description: Rules for commit content: short bullet list, English, with conventional short codes
+alwaysApply: true
+---
+
+# Commit message content
+
+When creating or suggesting commit content (message / description), **follow these rules**.
+
+## Format
+
+- **Short**: One idea per line; avoid long sentences.
+- **Bullet list**: Use leading dashes (bullets) to list each change.
+- **Accurate and complete**: Each bullet must summarize the change (scope + what changed); do not omit important changes or be vague.
+
+## Short codes (conventional)
+
+Prefix each bullet with a **short code** in square brackets. Use the code that best matches the change:
+
+| Code   | Use for |
+|--------|--------|
+| `feat` | New feature or capability |
+| `fix`  | Bug fix |
+| `docs` | Documentation, comments, rules (e.g. `.mdc`, `.md`) |
+| `refactor` | Code restructure, no behavior change |
+| `style` | Formatting, whitespace, naming only |
+| `test` | Tests only |
+| `chore` | Config, build, tooling, dependencies |
+| `perf` | Performance improvement |
+
+**Example bullets with codes:**
+
+- `[feat]` commit VETC: add general1/general2 to serialization
+- `[fix]` Kafka payload datetime format (ISO 8601)
+- `[docs]` add commit-messages rule; update project.mdc
+- `[refactor]` checkin: use common parse_etag
+
+## Principles
+
+1. **One bullet = one logical change (or related group)**: Group changes by purpose (e.g. "add field X to struct Y and serialize in messages") instead of one bullet per file.
+2. **Traceable**: A reader should understand what was added/changed/removed and where (handler, model, service, …) when relevant.
+3. **Language**: Use **English** for commit content.
+4. **No redundancy**: Do not list every file; summarize by logic (e.g. "checkin VDTC/VETC: validate session before calling BOO").
+
+## Examples
+
+**❌ Wrong — too vague:**
+
+``` text
+Update code
+Fix some files
+```
+
+**❌ Wrong — no bullets, no codes:**
+
+``` text
+Updated commit handler to add validation and fix message serialization and logging.
+```
+
+**✅ Correct — short, bullets, codes, English:**
+
+``` text
+- [feat] commit VETC: validate session before BOO call; add general1/general2 to serialize.
+- [fix] Kafka payload datetime format (ISO 8601).
+- [docs] logging: add structured field request_id for commit.
+```
+
+**✅ Correct — multiple changes, clear codes:**
+
+``` text
+- [feat] models: add VDTC CommitRequest type; adjust binary offsets in messages.
+- [refactor] checkin: use common parse_etag instead of duplicated logic.
+- [chore] config: add env KAFKA_TOPIC_COMMIT.
+```
+
+## Summary
+
+- Commit content: **short**, **bullet list**, **accurate and complete**.
+- One bullet = one change (or related group); prefix with **short code** `[feat]`, `[fix]`, `[docs]`, etc.
+- Use **English**; do not omit important changes or use vague wording.

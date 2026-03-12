@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  rust-core-transaction:
+    image: hoanvu/rust-core-transaction:latest
+    container_name: rust-core-transaction
+    ports:
+      - "19002:19002"
+    # SECURITY: Use env_file instead of hardcoded passwords in environment section
+    # BẢO MẬT: Sử dụng env_file thay vì hardcoded passwords trong environment section
+    # Create a .env file (DO NOT commit it to git) with your actual values
+    # Tạo file .env (KHÔNG commit vào git) với các giá trị thực tế của bạn
+    env_file:
+      - .env
+    # Alternative: Use Docker secrets for production (recommended)
+    # Tùy chọn: Sử dụng Docker secrets cho production (khuyến nghị)
+    # secrets:
+    #   - rust_core_transaction_secrets
+    environment:
+      # Non-sensitive configuration can be set here or in .env file
+      # Cấu hình không nhạy cảm có thể đặt ở đây hoặc trong file .env
+      # Note: Override values from .env if needed
+      # Lưu ý: Ghi đè giá trị từ .env nếu cần
+      - PORT_LISTEN=19002
+      # Kafka (optional): set KAFKA_BOOTSTRAP_SERVERS in .env to enable; or override here
+      # - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      # - KAFKA_TOPIC_CHECKIN=topics.hub.trans.checkin
+      # - KAFKA_TOPIC_CHECKOUT=topics.hub.trans.checkout
+      # - KAFKA_DATA_VERSION=1.0
+      # - KAFKA_QUEUE_CAPACITY=10000
+      # - KAFKA_SEND_BATCH_SIZE=50
+      # - KAFKA_RETRIES=10
+      # - KAFKA_RETRY_INITIAL_DELAY_MS=1000
+      # - KAFKA_RETRY_MAX_DELAY_MS=60000
+      # - KAFKA_REQUEST_TIMEOUT_MS=5000
+      # SECURITY: Sensitive values (passwords, keys) should be in .env file, not here
+      # BẢO MẬT: Các giá trị nhạy cảm (passwords, keys) nên ở file .env, không phải ở đây
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # For Linux: map host.docker.internal to host gateway
+    # For Windows/Mac: host.docker.internal works out of the box
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - rust-network
+
+networks:
+  rust-network:
+    driver: bridge

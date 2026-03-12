@@ -1,0 +1,50 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+# Note: Cargo.lock is needed for reproducible builds, so don't ignore it
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Environment files (will be provided via K8s secrets/configmaps)
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+README*
+
+# Test files
+tests/
+**/*_test.rs
+
+# Debug files
+*.pdb
+*.dSYM/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# K8s files (not needed in image)
+k8s/
+*.yaml
+*.yml

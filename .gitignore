@@ -1,0 +1,31 @@
+/target
+
+# IDE
+.idea/
+
+# JVM crash logs
+hs_err_pid*.log
+replay_pid*.log
+logs/
+
+# Environment files with sensitive data
+# SECURITY: Never commit .env files containing passwords or secrets
+# BẢO MẬT: Không bao giờ commit file .env chứa passwords hoặc secrets
+.env
+.env.local
+.env.*.local
+*.env
+!env.template
+
+# Secret files
+# SECURITY: Never commit secret files
+# BẢO MẬT: Không bao giờ commit các file secret
+*secret*.yaml
+*secret*.yml
+!*secret*.example
+!*secret*.template
+secrets/
+.secrets/
+.env
+
+docs/
