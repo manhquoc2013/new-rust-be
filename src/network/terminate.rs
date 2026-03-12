@@ -10,25 +10,28 @@ pub mod status {
     pub use crate::constants::terminate::*;
 }
 
-/// Tạo và mã hóa message TERMINATE_RESP.
+/// Create and encrypt TERMINATE_RESP (0F) message: 32 bytes per spec 2.3.1.7.12 (message_length, command_id, version_id, request_id, session_id, status).
 pub fn create_terminate_resp_bytes(
     session_id: i64,
     encryption_key: &str,
     request_id: i64,
     status: i32,
+    version_id: i32,
 ) -> Option<Vec<u8>> {
     let fe_resp = FE_TERMINATE_RESP {
-        message_length: 28, // 4+4+8+8+4 = 28 bytes
+        message_length: crate::fe_protocol::TERMINATE_RESP_LEN,
         command_id: fe::TERMINATE_RESP,
+        version_id,
         request_id,
         session_id,
         status,
     };
 
     let encryptor = create_encryptor_with_key(encryption_key);
-    let mut buffer_write = Vec::with_capacity(28);
+    let mut buffer_write = Vec::with_capacity(32);
     buffer_write.extend_from_slice(&fe_resp.message_length.to_le_bytes());
     buffer_write.extend_from_slice(&fe_resp.command_id.to_le_bytes());
+    buffer_write.extend_from_slice(&fe_resp.version_id.to_le_bytes());
     buffer_write.extend_from_slice(&fe_resp.request_id.to_le_bytes());
     buffer_write.extend_from_slice(&fe_resp.session_id.to_le_bytes());
     buffer_write.extend_from_slice(&fe_resp.status.to_le_bytes());
@@ -101,8 +104,13 @@ pub fn send_terminate_resp_on_close(
             }
         };
 
-        let reply_bytes =
-            match create_terminate_resp_bytes(session_id, &encryption_key, 0, status_code) {
+        let reply_bytes = match create_terminate_resp_bytes(
+            session_id,
+            &encryption_key,
+            0,
+            status_code,
+            0,
+        ) {
                 Some(rb) => rb,
                 None => {
                     tracing::debug!(conn_id, "[Network] failed to create TERMINATE_RESP");

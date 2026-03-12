@@ -378,6 +378,8 @@ impl fmt::Debug for FE_ROLLBACK_RESP {
 pub struct FE_TERMINATE {
     pub message_length: i32,
     pub command_id: i32,
+    /// Message version (spec 2.3.1.7.11).
+    pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
 }
@@ -387,6 +389,7 @@ impl fmt::Debug for FE_TERMINATE {
         f.debug_struct("FE_TERMINATE")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
             .field("session_id", &self.session_id)
             .finish()
@@ -397,9 +400,11 @@ impl fmt::Debug for FE_TERMINATE {
 pub struct FE_TERMINATE_RESP {
     pub message_length: i32,
     pub command_id: i32,
+    /// Message version (spec 2.3.1.7.12).
+    pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
-    /// Terminate status (0: success, non-zero: failure), 4 bytes.
+    /// Terminate status (0: success, 1: failure), 4 bytes.
     pub status: i32,
 }
 
@@ -408,6 +413,7 @@ impl fmt::Debug for FE_TERMINATE_RESP {
         f.debug_struct("FE_TERMINATE_RESP")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
             .field("session_id", &self.session_id)
             .field("status", &self.status)

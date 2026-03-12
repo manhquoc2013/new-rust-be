@@ -24,13 +24,14 @@
 //! | request_id | 12..20  |
 //! | session_id | 20..28  |
 //!
-//! ## TERMINATE (24 bytes)
+//! ## TERMINATE (0E) 2.3.1.7.11 – 28 bytes
 //! | Field      | Offset  |
 //! |------------|---------|
 //! | msg_len    | 0..4    |
 //! | command_id | 4..8    |
-//! | request_id | 8..16   |
-//! | session_id | 16..24  |
+//! | version_id | 8..12   |
+//! | request_id | 12..20  |
+//! | session_id | 20..28  |
 //!
 //! ## CHECKIN (106 bytes), COMMIT (98 bytes), ROLLBACK (90 bytes)
 //! Header 0..24 (msg_len, command_id, request_id, session_id); then command-specific body.
@@ -49,8 +50,8 @@ pub mod len {
     pub const CONNECT: usize = 44;
     /// SHAKE (0C) 2.3.1.7.3: 4+4+4+8+8 = 28
     pub const HANDSHAKE: usize = 28;
-    /// TERMINATE: 4+4+8+8 = 24
-    pub const TERMINATE: usize = 24;
+    /// TERMINATE (0E) 2.3.1.7.11: 4+4+4+8+8 = 28
+    pub const TERMINATE: usize = 28;
     /// CHECKIN: 4+4+8+8 + etag 24 + station 4 + lane 4 + plate 10 + tid 24 + hash 16 = 106
     pub const CHECKIN: usize = 106;
     /// COMMIT: 4+4+8+8 + etag 24 + ... + ticket_id 8 + ... = 98
@@ -62,6 +63,17 @@ pub mod len {
 // ---------------------------------------------------------------------------
 // Read: request_id, session_id (and ticket_id) from buffer (8-byte IDs)
 // ---------------------------------------------------------------------------
+
+/// Parse TERMINATE (0E) 28-byte message: version_id 8..12, request_id 12..20, session_id 20..28.
+pub fn parse_terminate_ids(data: &[u8]) -> Option<(i32, i64, i64)> {
+    if data.len() < 28 {
+        return None;
+    }
+    let version_id = i32::from_le_bytes(data[8..12].try_into().ok()?);
+    let request_id = i64::from_le_bytes(data[12..20].try_into().ok()?);
+    let session_id = i64::from_le_bytes(data[20..28].try_into().ok()?);
+    Some((version_id, request_id, session_id))
+}
 
 /// Parse request_id and session_id after first 8 bytes (message_length, command_id).
 /// Buffer must be at least 24 bytes. For SHAKE (0C) use `parse_shake_ids` (28 bytes).
@@ -199,10 +211,13 @@ pub async fn write_fe_ticket_id<W: AsyncWriteExt + Unpin>(
     Ok(())
 }
 
-/// Message length for header+status only (TERMINATE_RESP, COMMIT_RESP, ROLLBACK_RESP): 28 bytes. SHAKE_RESP uses `SHAKE_RESP_LEN` (32).
+/// Message length for header+status only (COMMIT_RESP, ROLLBACK_RESP): 28 bytes. TERMINATE_RESP (0F) 2.3.1.7.12 uses `TERMINATE_RESP_LEN` (32). SHAKE_RESP uses `SHAKE_RESP_LEN` (32).
 pub fn response_header_status_len() -> i32 {
     28
 }
+
+/// TERMINATE_RESP (0F) 2.3.1.7.12: 32 bytes (message_length, command_id, version_id, request_id, session_id, status).
+pub const TERMINATE_RESP_LEN: i32 = 32;
 
 /// CONNECT_RESP (2.3.1.7.2): 32 bytes (message_length, command_id, version_id, request_id, session_id, status).
 pub const CONNECT_RESP_LEN: i32 = 32;

@@ -34,10 +34,10 @@ pub mod fe {
     /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (84 bytes, spec 3B CHECKIN_ROLLBACK_BOO_RESP).
     pub const ROLLBACK_RESP: i32 = 0x6B;
 
-    /// TERMINATE – FE gửi req (28 bytes). Backend trả TERMINATE_RESP.
+    /// TERMINATE (0E) – FE gửi req (28 bytes, spec 2.3.1.7.11). Backend trả TERMINATE_RESP.
     pub const TERMINATE: i32 = 0x70;
 
-    /// TERMINATE_RESP – Backend trả FE sau khi xử lý TERMINATE (32 bytes).
+    /// TERMINATE_RESP (0F) – Backend trả FE sau khi xử lý TERMINATE (32 bytes, spec 2.3.1.7.12).
     pub const TERMINATE_RESP: i32 = 0x71;
 
     /// QUERY_VEHICLE_BOO command - Client sends for query vehicle boo - Msg length: 122 bytes
