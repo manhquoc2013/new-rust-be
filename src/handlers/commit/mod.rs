@@ -1,6 +1,6 @@
-//! Handler COMMIT: BECT only (ETC local).
+//! Handler COMMIT: cặp msg req/resp từ FE. FE gửi COMMIT (req, 3A/0x68) → processor gọi handle_commit → handler trả COMMIT_RESP (resp, 3B/0x69) cho FE.
 
-mod bect;
+mod handler;
 pub(crate) mod common;
 mod kafka_payload;
 
@@ -15,7 +15,7 @@ use r2d2::Pool;
 use std::error::Error;
 use std::sync::Arc;
 
-/// Handles COMMIT command: parse FE_COMMIT_IN, call BECT handler.
+/// Handles COMMIT (FE req 3A/0x68): parse FE_COMMIT_IN, gọi process handler, return COMMIT_RESP (resp 3B/0x69) to FE.
 /// Returns (response, status, called_boo_client, direction, station_in_for_out) for TCOC in/out.
 pub async fn handle_commit(
     rq: FE_REQUEST,
@@ -69,8 +69,8 @@ pub async fn handle_commit(
 
     let _process_type_guard = ProcessTypeGuard::new(ProcessType::BETC);
 
-    tracing::debug!(request_id = fe_commit.request_id, "[Processor] COMMIT BECT");
-    bect::handle_bect_commit(&fe_commit, conn_id, &encryptor, db_pool, cache)
+    tracing::debug!(request_id = fe_commit.request_id, "[Processor] COMMIT");
+    handler::process_commit(&fe_commit, conn_id, &encryptor, db_pool, cache)
         .await
         .map(|(r, s)| (r, s, false, direction, None))
 }

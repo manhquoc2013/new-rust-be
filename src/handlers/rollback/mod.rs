@@ -1,6 +1,6 @@
-//! Handler ROLLBACK: BECT only (no BOO/VETC/VDTC).
+//! Handler ROLLBACK: FE gửi ROLLBACK (req), backend trả ROLLBACK_RESP (resp).
 
-mod bect;
+mod handler;
 mod common;
 
 use crate::cache::config::cache_manager::CacheManager;
@@ -13,7 +13,7 @@ use r2d2::Pool;
 use std::error::Error;
 use std::sync::Arc;
 
-/// Xử lý ROLLBACK command: parse FE_ROLLBACK, gọi handler BECT.
+/// Xử lý ROLLBACK (FE req): parse FE_ROLLBACK, gọi process handler, trả ROLLBACK_RESP cho FE.
 /// Trả về (response, status, called_boo_client, direction, station_in_for_out). direction lấy từ lane khi có db_pool + cache.
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_rollback(
@@ -70,7 +70,7 @@ pub async fn handle_rollback(
         _ => None,
     };
 
-    bect::handle_bect_rollback(&fe_rollback, conn_id, &encryptor)
+    handler::process_rollback(&fe_rollback, conn_id, &encryptor)
         .await
         .map(|(r, s)| (r, s, false, direction, None))
 }

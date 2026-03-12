@@ -157,23 +157,82 @@ impl fmt::Debug for QUERY_VEHICLE_BOO_RESP {
     }
 }
 
-// ============== COMMIT_BOO_RESP (0x69, 84 bytes) ==============
+// ============== 3A CHECKIN_COMMIT_BOO (0x68, 152 bytes) ==============
 
+/// CHECKIN_COMMIT_BOO (3A) – Highway Back-End sends to Card-issuer Back-End to commit check-in.
+/// Command ID: 104 (0x68). Size: 152 bytes. Spec: 2.3.1.7.7.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct CHECKIN_COMMIT_BOO {
+    pub message_length: i32,   // 4 – 152
+    pub command_id: i32,       // 4 – 104
+    pub version_id: i32,       // 4
+    pub request_id: i64,       // 8
+    pub session_id: i64,       // 8
+    pub timestamp: i64,        // 8 – epoch ms when sending
+    pub ticket_id: i64,        // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,     // 8 – BOOB unique transaction ID
+    pub tid: String,           // 24 – TID
+    pub etag: String,          // 24 – EPC/ETAG
+    pub station: i32,          // 4
+    pub station_type: String,  // 1 – C: closed, O: open
+    pub lane_type: String,     // 1 – I: in, O: out; null for open station
+    pub lane: i32,             // 4
+    pub plate_from_toll: String, // 10 – recognized plate
+    pub commit_datetime: i64,   // 8 – epoch ms
+    pub general1: [u8; 8],     // 8
+    pub general2: [u8; 16],   // 16
+}
+
+impl fmt::Debug for CHECKIN_COMMIT_BOO {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CHECKIN_COMMIT_BOO")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("ticket_id", &self.ticket_id)
+            .field("ref_trans_id", &self.ref_trans_id)
+            .field("tid", &self.tid.trim_end_matches('\0'))
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("station", &self.station)
+            .field("station_type", &self.station_type.trim_end_matches('\0'))
+            .field("lane_type", &self.lane_type.trim_end_matches('\0'))
+            .field("lane", &self.lane)
+            .field("plate_from_toll", &self.plate_from_toll.trim_end_matches('\0'))
+            .field("commit_datetime", &self.commit_datetime)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
+// ============== COMMIT_BOO_RESP / CHECKIN_COMMIT_BOO_RESP (3B, 0x69, 84 bytes) ==============
+
+/// CHECKIN_COMMIT_BOO_RESP (3B) – Card-issuer Back-End response to CHECKIN_COMMIT_BOO (3A).
+/// Highway Back-End receives this from Card-issuer Back-End after commit check-in.
+/// Command ID: 105 (0x69). Size: 84 bytes. Spec: 2.3.1.7.8.
+#[allow(dead_code)]
+pub type CHECKIN_COMMIT_BOO_RESP = COMMIT_BOO_RESP;
+
+/// COMMIT_BOO_RESP (3B) – Same as CHECKIN_COMMIT_BOO_RESP. Command ID: 105 (0x69). Size: 84 bytes.
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct COMMIT_BOO_RESP {
-    pub message_length: i32,
-    pub command_id: i32,
-    pub version_id: i32,
-    pub request_id: i64,
-    pub session_id: i64,
-    pub timestamp: i64,
-    pub process_time: i32,
-    pub ticket_id: i64,
-    pub ref_trans_id: i64,
-    pub status: i32,
-    pub general1: [u8; 8],
-    pub general2: [u8; 16],
+    pub message_length: i32,  // 4 – 84
+    pub command_id: i32,      // 4 – 105
+    pub version_id: i32,      // 4
+    pub request_id: i64,      // 8
+    pub session_id: i64,      // 8
+    pub timestamp: i64,       // 8 – epoch ms when responding
+    pub process_time: i32,    // 4 – millisecond
+    pub ticket_id: i64,       // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,    // 8 – BOOB unique transaction ID
+    pub status: i32,          // 4 – 0: success
+    pub general1: [u8; 8],    // 8
+    pub general2: [u8; 16],  // 16
 }
 
 impl fmt::Debug for COMMIT_BOO_RESP {

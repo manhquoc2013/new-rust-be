@@ -1,4 +1,4 @@
-//! Handler ROLLBACK cho BECT: cập nhật trạng thái, gửi FE_ROLLBACK_RESP.
+//! Handler ROLLBACK: FE gửi ROLLBACK (req), handler cập nhật trạng thái, trả FE_ROLLBACK_RESP (resp).
 
 use super::common::serialize_and_encrypt_rollback_response;
 use crate::constants::fe;
@@ -8,8 +8,8 @@ use aes;
 use cbc;
 use std::error::Error;
 
-/// Xử lý ROLLBACK cho thẻ BECT (ETC) - logic mặc định
-pub(crate) async fn handle_bect_rollback(
+/// Xử lý ROLLBACK (process): trả FE_ROLLBACK_RESP.
+pub(crate) async fn process_rollback(
     fe_rollback: &FE_ROLLBACK,
     conn_id: i32,
     encryptor: &cbc::Encryptor<aes::Aes128>,
@@ -17,7 +17,7 @@ pub(crate) async fn handle_bect_rollback(
     tracing::debug!(
         conn_id,
         request_id = fe_rollback.request_id,
-        "[BECT] processing rollback"
+        "[ROLLBACK] processing rollback"
     );
 
     let mut fe_resp: FE_ROLLBACK_RESP = FE_ROLLBACK_RESP::default();
@@ -31,14 +31,14 @@ pub(crate) async fn handle_bect_rollback(
         conn_id,
         request_id = fe_rollback.request_id,
         status = fe_resp.status,
-        "[BECT] rollback response"
+        "[ROLLBACK] rollback response"
     );
     let reply_bytes = serialize_and_encrypt_rollback_response(&fe_resp, encryptor).await?;
     tracing::debug!(
         conn_id,
         request_id = fe_rollback.request_id,
         reply_len = reply_bytes.len(),
-        "[BECT] sending FE_ROLLBACK_RESP"
+        "[ROLLBACK] sending FE_ROLLBACK_RESP"
     );
 
     Ok((reply_bytes, fe_resp.status))

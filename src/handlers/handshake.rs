@@ -1,4 +1,4 @@
-//! SHAKE (0C) handler: parse FE_SHAKE (28 bytes), return FE_SHAKE_RESP (32 bytes) per spec 2.3.1.7.3 / 2.3.1.7.4.
+//! HANDSHAKE (SHAKE) handler: FE gửi HANDSHAKE (req, 28 bytes), backend trả SHAKE_RESP (resp, 32 bytes) per spec 2.3.1.7.3 / 2.3.1.7.4.
 
 use crate::constants::fe;
 use crate::crypto::{create_encryptor_with_key, BlockEncryptMut, Pkcs7};

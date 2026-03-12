@@ -1,5 +1,7 @@
 //! Route FE requests by command_id: connect, handshake, checkin, commit, rollback, terminate.
 //!
+//! **Luồng bản tin:** Tất cả đều cặp msg req/resp từ FE: FE gửi req (CONNECT, HANDSHAKE, CHECKIN, COMMIT, ROLLBACK, TERMINATE), processor phân command_id và gọi handler tương ứng, handler trả resp cho FE.
+//!
 //! **Throughput flow:** TCOC_REQUEST is saved (await) before dispatch; after handler returns, TCOC_REQUEST toll_in/toll_out and TCOC_RESPONSE/ROAMING run in background (spawn, non-blocking) to return results to FE quickly.
 
 use crate::cache::config::cache_manager::CacheManager;
@@ -465,6 +467,7 @@ pub async fn process_request(
     };
 
     tracing::debug!(conn_id = ctx.conn_id, request_id = ctx.request_id, command_id = %format!("0x{:02X}", command_id), "[Processor] routing to handler");
+    // command_id → handler: CONNECT→handle_connect, HANDSHAKE→handle_handshake, CHECKIN→handle_checkin, COMMIT→handle_commit, ROLLBACK→handle_rollback, TERMINATE→handle_terminate
     Ok(match command_id {
         fe::CONNECT => {
             tracing::debug!(

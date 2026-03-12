@@ -1,4 +1,4 @@
-//! Handle TERMINATE command: serialize/encrypt FE_TERMINATE_RESP, remove session.
+//! TERMINATE handler: FE gửi TERMINATE (req), backend trả TERMINATE_RESP (resp). Serialize/encrypt FE_TERMINATE_RESP, remove session.
 
 use crate::constants::fe;
 use crate::crypto::{create_encryptor_with_key, BlockEncryptMut, Pkcs7};

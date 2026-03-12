@@ -1,41 +1,43 @@
 //! Command_id constants for FE, VDTC, VETC protocols (avoid magic numbers in code).
+//!
+//! **Luồng FE:** Các cặp bản tin req/resp đều từ FE: FE gửi req (CONNECT, HANDSHAKE, CHECKIN, COMMIT, ROLLBACK, TERMINATE), backend trả resp tương ứng (CONNECT_RESP, SHAKE_RESP, CHECKIN_RESP, COMMIT_RESP, ROLLBACK_RESP, TERMINATE_RESP). Processor phân command_id và gọi handler tương ứng.
 
-/// Front-End (FE) protocol command IDs.
+/// Front-End (FE) protocol command IDs – cặp req/resp từ FE.
 pub mod fe {
-    /// CONNECT command - Client sends to connect to server - Msg length: 44 bytes
+    /// CONNECT – FE gửi req (44 bytes). Backend trả CONNECT_RESP.
     pub const CONNECT: i32 = 0x6C;
 
-    /// CONNECT_RESP - Server response to CONNECT - Msg length: 32 bytes
+    /// CONNECT_RESP – Backend trả FE sau khi xử lý CONNECT (32 bytes).
     pub const CONNECT_RESP: i32 = 0x6D;
 
-    /// HANDSHAKE command - Client sends for handshake - Msg length: 28 bytes
+    /// HANDSHAKE (SHAKE) – FE gửi req (28 bytes). Backend trả SHAKE_RESP.
     pub const HANDSHAKE: i32 = 0x1C;
 
-    /// SHAKE_RESP - Server response to HANDSHAKE - Msg length: 32 bytes
+    /// SHAKE_RESP – Backend trả FE sau khi xử lý HANDSHAKE (32 bytes).
     pub const SHAKE_RESP: i32 = 0x6F;
 
-    /// CHECKIN command - Client sends for checkin - Msg length: 172 bytes
+    /// CHECKIN – FE gửi req (172 bytes). Backend trả CHECKIN_RESP.
     pub const CHECKIN: i32 = 0x66;
 
-    /// CHECKIN_RESP - Server response to CHECKIN - Msg length: 76 bytes
+    /// CHECKIN_RESP – Backend trả FE sau khi xử lý CHECKIN (76 bytes).
     pub const CHECKIN_RESP: i32 = 0x67;
 
-    /// COMMIT command - Client sends for commit - Msg length: 152 bytes
+    /// COMMIT – FE gửi req (152 bytes, spec 3A). Backend trả COMMIT_RESP. Processor gọi handle_commit.
     pub const COMMIT: i32 = 0x68;
 
-    /// COMMIT_RESP - Server response to COMMIT - Msg length: 84 bytes
+    /// COMMIT_RESP – Backend trả FE sau khi xử lý COMMIT (84 bytes, spec 3B).
     pub const COMMIT_RESP: i32 = 0x69;
 
-    /// ROLLBACK command - Client sends for rollback - Msg length: 152 bytes
+    /// ROLLBACK – FE gửi req (152 bytes). Backend trả ROLLBACK_RESP.
     pub const ROLLBACK: i32 = 0x6A;
 
-    /// ROLLBACK_RESP - Server response to ROLLBACK - Msg length: 84 bytes
+    /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (84 bytes).
     pub const ROLLBACK_RESP: i32 = 0x6B;
 
-    /// TERMINATE command - Client sends for terminate - Msg length: 28 bytes
+    /// TERMINATE – FE gửi req (28 bytes). Backend trả TERMINATE_RESP.
     pub const TERMINATE: i32 = 0x70;
 
-    /// TERMINATE_RESP - Server response to TERMINATE - Msg length: 32 bytes
+    /// TERMINATE_RESP – Backend trả FE sau khi xử lý TERMINATE (32 bytes).
     pub const TERMINATE_RESP: i32 = 0x71;
 
     /// QUERY_VEHICLE_BOO command - Client sends for query vehicle boo - Msg length: 122 bytes
@@ -62,6 +64,11 @@ pub mod fe {
     pub const CHECKOUT_ROLLBACK_BOO: i32 = 0x9C;
     /// CHECKOUT_ROLLBACK_BOO_RESP - Server response to CHECKOUT_ROLLBACK_BOO - Msg length: 96 bytes
     pub const CHECKOUT_ROLLBACK_BOO_RESP: i32 = 0x9D;
+
+    /// BOO 3A CHECKIN_COMMIT_BOO (same value as COMMIT). Spec 2.3.1.7.7.
+    pub const CHECKIN_COMMIT_BOO: i32 = 0x68;
+    /// BOO 3B CHECKIN_COMMIT_BOO_RESP (same value as COMMIT_RESP). Spec 2.3.1.7.8.
+    pub const CHECKIN_COMMIT_BOO_RESP: i32 = 0x69;
 
     /// FE status: 0=Success, 14..107=subscriber/account/etag, 200..304=transaction/route/price, 901..903=system/BOO integration.
     /// 301 NOT_FOUND_STATION_LANE - Lane not found for station; CONNECT: used for unauthorized (wrong password)
@@ -164,8 +171,8 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::SHAKE_RESP => "FE_SHAKE_RESP",
         fe::CHECKIN => "FE_CHECKIN", // Same value as vdtc::CHECKIN (0x04)
         fe::CHECKIN_RESP => "FE_CHECKIN_RESP",
-        fe::COMMIT => "FE_COMMIT", // Same value as vdtc::COMMIT_BOO (0x06)
-        fe::COMMIT_RESP => "FE_COMMIT_RESP",
+        fe::COMMIT => "FE_COMMIT", // Same as BOO CHECKIN_COMMIT_BOO (3A, 0x68)
+        fe::COMMIT_RESP => "FE_COMMIT_RESP", // Same as BOO CHECKIN_COMMIT_BOO_RESP (3B, 0x69)
         fe::ROLLBACK => "FE_ROLLBACK",
         fe::ROLLBACK_RESP => "FE_ROLLBACK_RESP",
         fe::TERMINATE => "FE_TERMINATE",

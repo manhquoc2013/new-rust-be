@@ -1,14 +1,15 @@
 //! Cập nhật ETDR từ response commit/checkout.
+//! BOO check-in commit: nhận CHECKIN_COMMIT_BOO_RESP (3B, 0x69) sau khi gửi CHECKIN_COMMIT_BOO (3A, 0x68).
 
 use crate::utils::timestamp_ms;
 
 use super::ETDR;
 
 impl ETDR {
-    /// Update ETDR from BOO COMMIT_BOO_RESP (commit step).
+    /// Update ETDR from BOO CHECKIN_COMMIT_BOO_RESP (3B) – VDTC path.
     pub fn update_from_commit(
         &mut self,
-        vdtc_commit_resp: &crate::models::bect_messages::COMMIT_BOO_RESP,
+        vdtc_commit_resp: &crate::models::bect_messages::CHECKIN_COMMIT_BOO_RESP,
     ) {
         let now = timestamp_ms();
 
@@ -18,10 +19,10 @@ impl ETDR {
         self.ref_trans_id = vdtc_commit_resp.ref_trans_id;
     }
 
-    /// Update ETDR from BOO COMMIT_BOO_RESP (VETC path; same type as VDTC).
+    /// Update ETDR from BOO CHECKIN_COMMIT_BOO_RESP (3B) – VETC path.
     pub fn update_from_commit_vetc(
         &mut self,
-        vetc_commit_resp: &crate::models::bect_messages::COMMIT_BOO_RESP,
+        vetc_commit_resp: &crate::models::bect_messages::CHECKIN_COMMIT_BOO_RESP,
     ) {
         let now = timestamp_ms();
 

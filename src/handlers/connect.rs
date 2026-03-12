@@ -1,4 +1,4 @@
-//! CONNECT handler: create session, send FE_CONNECT_RESP per spec 2.3.1.7.1 / 2.3.1.7.2.
+//! CONNECT handler: FE gửi CONNECT (req), backend trả CONNECT_RESP (resp) per spec 2.3.1.7.1 / 2.3.1.7.2.
 //! Flow: decrypt → validate length → auth (or bypass) → allocate session_id → save TCOC_SESSIONS → send CONNECT_RESP (32 bytes).
 
 use crate::configs::mediation_db::MEDIATION_DB;

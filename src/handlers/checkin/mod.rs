@@ -1,6 +1,6 @@
-//! Handler CHECKIN: phân loại theo eTag, gọi VETC/VDTC/BECT.
+//! Handler CHECKIN: FE gửi CHECKIN (req), backend trả CHECKIN_RESP (resp). Phân loại theo eTag, gọi process handler tương ứng.
 
-mod bect;
+mod handler;
 pub(crate) mod common;
 
 use crate::cache::config::cache_manager::CacheManager;
@@ -51,7 +51,7 @@ async fn build_checkin_not_found_response(
     Ok((reply_bytes, fe_resp.status, direction))
 }
 
-/// Xử lý CHECKIN command: parse request, lấy toll/lane, gọi handler BECT.
+/// Xử lý CHECKIN command: parse request, lấy toll/lane, gọi process handler.
 pub async fn handle_checkin(
     rq: FE_REQUEST,
     data: &[u8],
@@ -169,9 +169,9 @@ pub async fn handle_checkin(
 
     tracing::debug!(
         request_id = fe_checkin.request_id,
-        "[Processor] CHECKIN BOO type BECT"
+        "[Processor] CHECKIN"
     );
-    bect::handle_bect_checkin(
+    handler::process_checkin(
         &fe_checkin,
         conn_id,
         &_toll,

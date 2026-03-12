@@ -1,4 +1,5 @@
 //! Serialize FE_COMMIT_IN_RESP, lấy rating_detail từ TCD (BECT transport) cho commit.
+//! Cặp msg req/resp từ FE: FE gửi COMMIT (req) → processor gọi handle_commit → handler trả COMMIT_RESP (resp) cho FE.
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::cache::config::cache_prefix::CachePrefix;
@@ -7,10 +8,11 @@ use crate::crypto::BlockEncryptMut;
 use crate::crypto::Pkcs7;
 use crate::db::repositories::TransportTransStageTcdRepository;
 use crate::fe_protocol;
-use crate::models::TCOCmessages::FE_COMMIT_IN_RESP;
+use crate::models::TCOCmessages::{FE_COMMIT_IN, FE_COMMIT_IN_RESP};
 use crate::models::RatingDetail as VDTCRatingDetail;
-use crate::models::ETDR::clear_etdr_after_transaction_complete;
-use crate::models::ETDR::BOORatingDetail;
+use crate::models::ETDR::{clear_etdr_after_transaction_complete, BOORatingDetail, ETDR};
+use crate::constants::fe;
+use crate::models::bect_messages::CHECKIN_COMMIT_BOO;
 use crate::price_ticket_type::from_db_string;
 use crate::services::service::Service;
 use aes;
@@ -23,6 +25,57 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Semaphore;
 
 use crate::utils::timestamp_ms;
+
+/// Pad string to fixed length with nulls (for BOO fixed-width string fields).
+fn pad_str(s: &str, len: usize) -> String {
+    let mut out = s.to_string();
+    out.truncate(len);
+    while out.len() < len {
+        out.push('\0');
+    }
+    out
+}
+
+/// Build CHECKIN_COMMIT_BOO (3A, 152 bytes) for VDTC/VETC commit IN. Highway Back-End sends to Card-issuer Back-End to commit check-in. Caller must send to BOO; on CHECKIN_COMMIT_BOO_RESP (3B) call `etdr.update_from_commit(resp)` or `etdr.update_from_commit_vetc(resp)`.
+#[allow(dead_code)]
+pub(crate) fn build_checkin_commit_boo(
+    fe_commit: &FE_COMMIT_IN,
+    etdr: &ETDR,
+    session_id: i64,
+    version_id: i32,
+) -> CHECKIN_COMMIT_BOO {
+    let now = timestamp_ms();
+    let station_type = etdr
+        .boo_toll_type
+        .as_deref()
+        .map(|s| s.chars().next().unwrap_or('C'))
+        .unwrap_or('C');
+    let lane_type = etdr
+        .boo_lane_type
+        .as_deref()
+        .map(|s| s.chars().next().unwrap_or('I'))
+        .unwrap_or('I');
+    CHECKIN_COMMIT_BOO {
+        message_length: 152,
+        command_id: fe::CHECKIN_COMMIT_BOO,
+        version_id,
+        request_id: fe_commit.request_id,
+        session_id,
+        timestamp: now,
+        ticket_id: etdr.ticket_id,
+        ref_trans_id: etdr.ref_trans_id,
+        tid: pad_str(etdr.t_id.trim(), 24),
+        etag: pad_str(etdr.etag_number.trim(), 24),
+        station: fe_commit.station,
+        station_type: pad_str(&station_type.to_string(), 1),
+        lane_type: pad_str(&lane_type.to_string(), 1),
+        lane: fe_commit.lane,
+        plate_from_toll: pad_str(fe_commit.plate.trim(), 10),
+        commit_datetime: now,
+        general1: [0u8; 8],
+        general2: [0u8; 16],
+    }
+}
 
 /// Serialize and encrypt FE_COMMIT_IN_RESP response.
 pub(crate) async fn serialize_and_encrypt_commit_response(

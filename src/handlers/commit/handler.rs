@@ -1,10 +1,11 @@
-//! Handler COMMIT cho BECT: cập nhật TRANSPORT_TRANSACTION_STAGE, gửi FE_COMMIT_IN_RESP.
+//! Handler COMMIT: cập nhật TRANSPORT_TRANSACTION_STAGE, trả FE COMMIT_RESP (resp).
+//! Cặp req/resp từ FE: FE gửi COMMIT (req) → processor gọi handle_commit → handler xử lý, trả COMMIT_RESP (resp) cho FE.
 //! Trước khi trả về lỗi luôn lưu dữ liệu giao dịch (ETDR + DB). OUT lane có kiểm tra tài khoản (env bypass).
 
-use super::super::common::{
+use super::common::{
     get_rating_detail_cached, invalidate_tcd_rating_cache, serialize_and_encrypt_commit_response,
 };
-use super::super::kafka_payload::{
+use super::kafka_payload::{
     build_checkin_payload_from_etdr, build_checkout_payload_from_etdr, send_checkin_to_kafka,
     send_checkout_to_kafka, CheckinPayloadOverrides, CheckoutPayloadOverrides,
 };
@@ -40,8 +41,8 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
 
-/// Xử lý COMMIT cho thẻ BECT (ETC) - logic mặc định
-pub(crate) async fn handle_bect_commit(
+/// Xử lý COMMIT (process): cập nhật stage, trả COMMIT_RESP.
+pub(crate) async fn process_commit(
     fe_commit: &FE_COMMIT_IN,
     conn_id: i32,
     encryptor: &cbc::Encryptor<aes::Aes128>,
@@ -51,7 +52,7 @@ pub(crate) async fn handle_bect_commit(
     tracing::debug!(
         conn_id,
         request_id = fe_commit.request_id,
-        "[BECT] processing commit"
+        "[COMMIT] processing commit"
     );
 
     // Chuẩn hóa etag sớm để dùng khi lưu ETDR trước khi trả lỗi (vd. TOLL_LANE not found)
@@ -67,11 +68,11 @@ pub(crate) async fn handle_bect_commit(
         request_id = fe_commit.request_id,
         elapsed_ms,
         step = "get_toll_lanes_by_toll_id_with_fallback",
-        "[BECT] COMMIT external call finished"
+        "[COMMIT] COMMIT external call finished"
     );
     let toll_lane = match lanes.iter().find(|l| l.lane_code == fe_commit.lane) {
         Some(l) => {
-            tracing::debug!(conn_id, request_id = fe_commit.request_id, toll_lane_id = l.toll_lane_id, lane_code = %l.lane_code, "[BECT] TOLL_LANE cache hit");
+            tracing::debug!(conn_id, request_id = fe_commit.request_id, toll_lane_id = l.toll_lane_id, lane_code = %l.lane_code, "[COMMIT] TOLL_LANE cache hit");
             l.clone()
         }
         None => {
@@ -85,14 +86,14 @@ pub(crate) async fn handle_bect_commit(
                 status = fe::NOT_FOUND_STATION_LANE,
                 error_detail = crate::utils::fe_status_detail(fe::NOT_FOUND_STATION_LANE),
                 detail = "TOLL_LANE not in cache",
-                "[BECT] COMMIT TOLL_LANE not in cache"
+                "[COMMIT] COMMIT TOLL_LANE not in cache"
             );
             // Lưu dữ liệu giao dịch (ETDR) trước khi trả về lỗi
             if let Some(mut etdr) = get_latest_checkin_by_etag(&etag_norm).await {
                 let now_ms = timestamp_ms();
                 etdr.time_update = now_ms;
                 save_etdr(etdr);
-                tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, "[BECT] ETDR cache updated before return TOLL_LANE error");
+                tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, "[COMMIT] ETDR cache updated before return TOLL_LANE error");
             }
             let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
             fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -112,7 +113,7 @@ pub(crate) async fn handle_bect_commit(
                 conn_id,
                 request_id = fe_commit.request_id,
                 lane_type = lane_type::IN,
-                "[BECT] processing IN lane"
+                "[COMMIT] processing IN lane"
             );
 
             let now = now_utc_db_string();
@@ -127,7 +128,7 @@ pub(crate) async fn handle_bect_commit(
             let db_opt = get_best_pending_from_sync_or_main_bect(&etag_norm).await;
             let etdr_opt = merge_latest_checkin_etdr(cache_opt, db_opt);
             let elapsed_ms = step_merge.elapsed().as_millis() as u64;
-            tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, elapsed_ms, step = "resolve_etdr_merge_IN", "[BECT] COMMIT step finished");
+            tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, elapsed_ms, step = "resolve_etdr_merge_IN", "[COMMIT] COMMIT step finished");
 
             if let Some(ref etdr) = etdr_opt {
                 if etdr.checkin_commit_datetime != 0
@@ -144,7 +145,7 @@ pub(crate) async fn handle_bect_commit(
                         status = fe::NOT_FOUND_ROUTE_TRANSACTION,
                         error_detail = crate::utils::fe_status_detail(fe::NOT_FOUND_ROUTE_TRANSACTION),
                         detail = "transaction not found (already has checkin commit)",
-                        "[BECT] COMMIT failed"
+                        "[COMMIT] COMMIT failed"
                     );
                     let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                     fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -165,7 +166,7 @@ pub(crate) async fn handle_bect_commit(
                             conn_id,
                             request_id = fe_commit.request_id,
                             transport_trans_id = found_transport_trans_id,
-                            "[BECT] TRANSPORT_TRANSACTION_STAGE found by merge (cache+sync+TTS) for checkin commit"
+                            "[COMMIT] TRANSPORT_TRANSACTION_STAGE found by merge (cache+sync+TTS) for checkin commit"
                         );
                     } else {
                         tracing::error!(
@@ -173,7 +174,7 @@ pub(crate) async fn handle_bect_commit(
                             request_id = fe_commit.request_id,
                             etag = %etag_norm,
                             transport_trans_id = etdr.ticket_id,
-                            "[BECT] return error: transaction not found (record already has checkin_commit_datetime)"
+                            "[COMMIT] return error: transaction not found (record already has checkin_commit_datetime)"
                         );
                     }
                 } else {
@@ -182,7 +183,7 @@ pub(crate) async fn handle_bect_commit(
                         request_id = fe_commit.request_id,
                         transport_trans_id = etdr.ticket_id,
                         etag = %etag_norm,
-                        "[BECT] TRANSPORT_TRANSACTION_STAGE get_by_id failed after merge"
+                        "[COMMIT] TRANSPORT_TRANSACTION_STAGE get_by_id failed after merge"
                     );
                 }
             } else {
@@ -192,7 +193,7 @@ pub(crate) async fn handle_bect_commit(
                     etag = %etag_norm,
                     station = fe_commit.station,
                     lane = fe_commit.lane,
-                    "[BECT] no record by merge (cache+sync+TTS) for checkin commit"
+                    "[COMMIT] no record by merge (cache+sync+TTS) for checkin commit"
                 );
             }
 
@@ -205,7 +206,7 @@ pub(crate) async fn handle_bect_commit(
                     status = fe::NOT_FOUND_ROUTE_TRANSACTION,
                     error_detail = crate::utils::fe_status_detail(fe::NOT_FOUND_ROUTE_TRANSACTION),
                     detail = "transaction not found (IN lane, no record from merge)",
-                    "[BECT] COMMIT failed"
+                    "[COMMIT] COMMIT failed"
                 );
                 let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                 fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -240,7 +241,7 @@ pub(crate) async fn handle_bect_commit(
                 toll_id = fe_commit.station,
                 lane_id = fe_commit.lane,
                 img_count = fe_commit.image_count,
-                "[BECT] updating CHECKIN COMMIT fields"
+                "[COMMIT] updating CHECKIN COMMIT fields"
             );
 
             if let Some(ref stage) = stage_for_in_update {
@@ -250,7 +251,7 @@ pub(crate) async fn handle_bect_commit(
                             tid,
                             found_transport_trans_id,
                             fe_commit.request_id,
-                            "[BECT]",
+                            "[COMMIT]",
                         )
                         .await
                         {
@@ -259,7 +260,7 @@ pub(crate) async fn handle_bect_commit(
                                 request_id = fe_commit.request_id,
                                 transport_trans_id = found_transport_trans_id,
                                 ticket_in_id = tid,
-                                "[BECT] COMMIT IN duplicate transaction, rejecting"
+                                "[COMMIT] COMMIT IN duplicate transaction, rejecting"
                             );
                             let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                             fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -293,7 +294,7 @@ pub(crate) async fn handle_bect_commit(
                         transport_trans_id = found_transport_trans_id,
                         station = fe_commit.station,
                         lane = fe_commit.lane,
-                        "[BECT] TRANSPORT_TRANSACTION_STAGE CHECKIN commit updated"
+                        "[COMMIT] TRANSPORT_TRANSACTION_STAGE CHECKIN commit updated"
                     );
                     // ETDR cache as source of truth: update cache from existing etdr (from merge cache+DB), do not overwrite from DB.
                     let now_ms = timestamp_ms();
@@ -311,7 +312,7 @@ pub(crate) async fn handle_bect_commit(
                         }
                         etdr.db_saved = true;
                         save_etdr(etdr.clone());
-                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated (source of truth, checkin commit)");
+                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated (source of truth, checkin commit)");
                         let payload = build_checkin_payload_from_etdr(
                             &etdr,
                             CheckinPayloadOverrides {
@@ -357,7 +358,7 @@ pub(crate) async fn handle_bect_commit(
                                 },
                             );
                             send_checkin_to_kafka(payload);
-                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache filled from DB (cache was miss)");
+                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache filled from DB (cache was miss)");
                         }
                     }
                 }
@@ -366,7 +367,7 @@ pub(crate) async fn handle_bect_commit(
                         conn_id,
                         request_id = fe_commit.request_id,
                         transport_trans_id = found_transport_trans_id,
-                        "[BECT] update returned false, no rows affected"
+                        "[COMMIT] update returned false, no rows affected"
                     );
                     // Vẫn update ETDR cache và gửi Kafka (reuse etdr from single merge fetch).
                     if let Some(mut etdr) = etdr_opt.clone() {
@@ -388,12 +389,12 @@ pub(crate) async fn handle_bect_commit(
                             },
                         );
                         save_etdr(etdr);
-                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated despite no rows affected");
+                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite no rows affected");
                         send_checkin_to_kafka(payload);
                     }
                 }
                 Err(e) => {
-                    tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[BECT] TRANSPORT_TRANSACTION_STAGE update failed");
+                    tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[COMMIT] TRANSPORT_TRANSACTION_STAGE update failed");
                     // Vẫn update ETDR cache và gửi Kafka (reuse etdr from single merge fetch).
                     if let Some(mut etdr) = etdr_opt.clone() {
                         let now_ms = timestamp_ms();
@@ -414,7 +415,7 @@ pub(crate) async fn handle_bect_commit(
                             },
                         );
                         save_etdr(etdr);
-                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated despite DB update failure");
+                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite DB update failure");
                         send_checkin_to_kafka(payload);
                     }
                 }
@@ -425,7 +426,7 @@ pub(crate) async fn handle_bect_commit(
                 conn_id,
                 request_id = fe_commit.request_id,
                 lane_type = lane_type::OUT,
-                "[BECT] processing OUT lane"
+                "[COMMIT] processing OUT lane"
             );
 
             let transport_trans_id = fe_commit.ticket_id;
@@ -448,14 +449,14 @@ pub(crate) async fn handle_bect_commit(
                 tracing::warn!(
                     conn_id,
                     request_id = fe_commit.request_id,
-                    "[BECT] ticket_id=0, finding latest by etag (cache + sync + TTS)"
+                    "[COMMIT] ticket_id=0, finding latest by etag (cache + sync + TTS)"
                 );
                 let step_merge_out = Instant::now();
                 let cache_opt = get_latest_checkin_by_etag(&etag_norm).await;
                 let db_opt = get_best_pending_from_sync_or_main_bect(&etag_norm).await;
                 let etdr_opt = merge_latest_checkin_etdr(cache_opt, db_opt);
                 let elapsed_ms = step_merge_out.elapsed().as_millis() as u64;
-                tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, elapsed_ms, step = "resolve_etdr_merge_OUT", "[BECT] COMMIT step finished");
+                tracing::debug!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, elapsed_ms, step = "resolve_etdr_merge_OUT", "[COMMIT] COMMIT step finished");
                 if let Some(etdr) = etdr_opt {
                     let valid_for_commit = etdr.checkout_datetime != 0
                         && etdr.checkout_commit_datetime == 0
@@ -471,14 +472,14 @@ pub(crate) async fn handle_bect_commit(
                                 conn_id,
                                 request_id = fe_commit.request_id,
                                 transport_trans_id = found_transport_trans_id,
-                                "[BECT] TRANSPORT_TRANSACTION_STAGE found by merge (cache+sync+TTS)"
+                                "[COMMIT] TRANSPORT_TRANSACTION_STAGE found by merge (cache+sync+TTS)"
                             );
                         } else {
                             tracing::error!(
                                 conn_id,
                                 request_id = fe_commit.request_id,
                                 transport_trans_id = etdr.ticket_id,
-                                "[BECT] TRANSPORT_TRANSACTION_STAGE get_by_id failed after merge"
+                                "[COMMIT] TRANSPORT_TRANSACTION_STAGE get_by_id failed after merge"
                             );
                         }
                     } else {
@@ -489,7 +490,7 @@ pub(crate) async fn handle_bect_commit(
                             ticket_id = etdr.ticket_id,
                             has_checkout_dt = etdr.checkout_datetime != 0,
                             has_commit_dt = etdr.checkout_commit_datetime != 0,
-                            "[BECT] return error: transaction not found (no checkout time or already has commit)"
+                            "[COMMIT] return error: transaction not found (no checkout time or already has commit)"
                         );
                         let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                         fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -502,7 +503,7 @@ pub(crate) async fn handle_bect_commit(
                         return Ok((reply_bytes, fe_resp.status));
                     }
                 } else {
-                    tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, station = fe_commit.station, lane = fe_commit.lane, "[BECT] no record by merge (cache+sync+TTS)");
+                    tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, station = fe_commit.station, lane = fe_commit.lane, "[COMMIT] no record by merge (cache+sync+TTS)");
                 }
             } else {
                 for retry_count in 0..=commit_retry::MAX_RETRIES {
@@ -513,7 +514,7 @@ pub(crate) async fn handle_bect_commit(
                                 request_id = fe_commit.request_id,
                                 transport_trans_id,
                                 retry = retry_count,
-                                "[BECT] TRANSPORT_TRANSACTION_STAGE found"
+                                "[COMMIT] TRANSPORT_TRANSACTION_STAGE found"
                             );
                             current_record_for_update = Some(stage.clone());
                             record_found = true;
@@ -530,12 +531,12 @@ pub(crate) async fn handle_bect_commit(
                                     delay_ms,
                                     attempt = retry_count + 1,
                                     max = commit_retry::MAX_RETRIES,
-                                    "[BECT] TRANSPORT_TRANSACTION_STAGE not found, retrying"
+                                    "[COMMIT] TRANSPORT_TRANSACTION_STAGE not found, retrying"
                                 );
                                 tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms))
                                     .await;
                             } else {
-                                tracing::warn!(conn_id, request_id = fe_commit.request_id, transport_trans_id, retries = commit_retry::MAX_RETRIES, "[BECT] TRANSPORT_TRANSACTION_STAGE not found after retries, fallback by merge (cache+sync+TTS)");
+                                tracing::warn!(conn_id, request_id = fe_commit.request_id, transport_trans_id, retries = commit_retry::MAX_RETRIES, "[COMMIT] TRANSPORT_TRANSACTION_STAGE not found after retries, fallback by merge (cache+sync+TTS)");
                                 let cache_opt = get_latest_checkin_by_etag(&etag_norm).await;
                                 let db_opt =
                                     get_best_pending_from_sync_or_main_bect(&etag_norm).await;
@@ -552,10 +553,10 @@ pub(crate) async fn handle_bect_commit(
                                             found_transport_trans_id = etdr.ticket_id;
                                             current_record_for_update = Some(stage);
                                             record_found = true;
-                                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, original_ticket_id = transport_trans_id, "[BECT] TRANSPORT_TRANSACTION_STAGE found by merge fallback");
+                                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, original_ticket_id = transport_trans_id, "[COMMIT] TRANSPORT_TRANSACTION_STAGE found by merge fallback");
                                         }
                                     } else {
-                                        tracing::error!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, ticket_id = etdr.ticket_id, has_checkout_dt = etdr.checkout_datetime != 0, has_commit_dt = etdr.checkout_commit_datetime != 0, "[BECT] return error: transaction not found");
+                                        tracing::error!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, ticket_id = etdr.ticket_id, has_checkout_dt = etdr.checkout_datetime != 0, has_commit_dt = etdr.checkout_commit_datetime != 0, "[COMMIT] return error: transaction not found");
                                         let mut fe_resp: FE_COMMIT_IN_RESP =
                                             FE_COMMIT_IN_RESP::default();
                                         fe_resp.message_length =
@@ -571,13 +572,13 @@ pub(crate) async fn handle_bect_commit(
                                         return Ok((reply_bytes, fe_resp.status));
                                     }
                                 } else {
-                                    tracing::error!(conn_id, request_id = fe_commit.request_id, transport_trans_id, etag = %etag_norm, "[BECT] TRANSPORT_TRANSACTION_STAGE not found by ticket_id or merge");
+                                    tracing::error!(conn_id, request_id = fe_commit.request_id, transport_trans_id, etag = %etag_norm, "[COMMIT] TRANSPORT_TRANSACTION_STAGE not found by ticket_id or merge");
                                 }
                                 break;
                             }
                         }
                         Err(e) => {
-                            tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[BECT] query TRANSPORT_TRANSACTION_STAGE by id failed");
+                            tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[COMMIT] query TRANSPORT_TRANSACTION_STAGE by id failed");
                             break;
                         }
                     }
@@ -594,7 +595,7 @@ pub(crate) async fn handle_bect_commit(
                     status = fe::NOT_FOUND_ROUTE_TRANSACTION,
                     error_detail = crate::utils::fe_status_detail(fe::NOT_FOUND_ROUTE_TRANSACTION),
                     detail = "transaction not found (OUT lane)",
-                    "[BECT] COMMIT failed"
+                    "[COMMIT] COMMIT failed"
                 );
                 let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                 fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -641,12 +642,12 @@ pub(crate) async fn handle_bect_commit(
                 .unwrap_or(Ok(None));
                 match &sub_opt {
                     Ok(None) => {
-                        tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, "[BECT] commit account check: subscriber not found");
+                        tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, "[COMMIT] commit account check: subscriber not found");
                         error_status = bect::SUBSCRIBER_NOT_FOUND;
                     }
                     Ok(Some(sub)) => {
                         if sub.account_id <= 0 {
-                            tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, account_id = sub.account_id, "[BECT] commit account check: account not found or inactive");
+                            tracing::warn!(conn_id, request_id = fe_commit.request_id, etag = %etag_norm, account_id = sub.account_id, "[COMMIT] commit account check: account not found or inactive");
                             error_status = bect::ACCOUNT_IS_NOT_ACTIVE;
                         }
                     }
@@ -677,7 +678,7 @@ pub(crate) async fn handle_bect_commit(
                 .unwrap_or(Ok(None));
                 if let Ok(Some(trans)) = trans_opt {
                     if !allow_commit_or_rollback(trans.autocommit, trans.autocommit_status) {
-                        tracing::debug!(conn_id, request_id = fe_commit.request_id, account_transaction_id = account_trans_id, autocommit = ?trans.autocommit, autocommit_status = ?trans.autocommit_status, "[BECT] ACCOUNT_TRANSACTION skip update (already committed/rollback or autocommit)");
+                        tracing::debug!(conn_id, request_id = fe_commit.request_id, account_transaction_id = account_trans_id, autocommit = ?trans.autocommit, autocommit_status = ?trans.autocommit_status, "[COMMIT] ACCOUNT_TRANSACTION skip update (already committed/rollback or autocommit)");
                     } else {
                         let (autocommit_status, new_balance, new_available_bal, old_rol, new_rol) =
                             if error_status == 0 {
@@ -720,11 +721,11 @@ pub(crate) async fn handle_bect_commit(
                                     request_id = fe_commit.request_id,
                                     account_transaction_id = account_trans_id,
                                     autocommit_status,
-                                    "[BECT] ACCOUNT_TRANSACTION commit status updated"
+                                    "[COMMIT] ACCOUNT_TRANSACTION commit status updated"
                                 );
                             }
                             Ok(Err(e)) => {
-                                tracing::error!(conn_id, request_id = fe_commit.request_id, account_transaction_id = account_trans_id, error = %e, "[BECT] ACCOUNT_TRANSACTION update_commit_status failed");
+                                tracing::error!(conn_id, request_id = fe_commit.request_id, account_transaction_id = account_trans_id, error = %e, "[COMMIT] ACCOUNT_TRANSACTION update_commit_status failed");
                             }
                             _ => {}
                         }
@@ -741,7 +742,7 @@ pub(crate) async fn handle_bect_commit(
                 img_count = fe_commit.image_count,
                 amount = fe_commit.transaction_amount,
                 charge_status,
-                "[BECT] updating CHECKOUT COMMIT fields"
+                "[COMMIT] updating CHECKOUT COMMIT fields"
             );
 
             let repo = TransportTransactionStageRepository::new();
@@ -809,7 +810,7 @@ pub(crate) async fn handle_bect_commit(
                         station = fe_commit.station,
                         lane = fe_commit.lane,
                         charge_status,
-                        "[BECT] TRANSPORT_TRANSACTION_STAGE CHECKOUT commit updated"
+                        "[COMMIT] TRANSPORT_TRANSACTION_STAGE CHECKOUT commit updated"
                     );
                     // Luôn load lại từ DB và update ETDR cache (dù SUCC hay FALL)
                     let transport_service = TransportTransactionStageService::default();
@@ -823,7 +824,7 @@ pub(crate) async fn handle_bect_commit(
                                     conn_id,
                                     request_id = fe_commit.request_id,
                                     transport_trans_id = found_transport_trans_id,
-                                    "[BECT] rating_details empty, loading from TCD"
+                                    "[COMMIT] rating_details empty, loading from TCD"
                                 );
                                 get_rating_detail_cached(
                                     cache.as_ref(),
@@ -901,7 +902,7 @@ pub(crate) async fn handle_bect_commit(
                                     tracing::debug!(
                                         conn_id, request_id = fe_commit.request_id,
                                         etag = %etag_norm,
-                                        "[BECT] checkout event sent to Kafka (built from DB, ETDR cache miss)"
+                                        "[COMMIT] checkout event sent to Kafka (built from DB, ETDR cache miss)"
                                     );
                                 }
                             }
@@ -917,7 +918,7 @@ pub(crate) async fn handle_bect_commit(
                                 true,
                             )
                             .await;
-                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cleared after checkout commit");
+                            tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cleared after checkout commit");
                         }
                         Ok(None) | Err(_) => {
                             // Nếu không load được từ DB, vẫn update ETDR cache và gửi Kafka (reuse single fetch).
@@ -960,7 +961,7 @@ pub(crate) async fn handle_bect_commit(
                                     etdr.sync_status = 0;
                                 }
                                 save_etdr(etdr);
-                                tracing::warn!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated (DB record not found after update)");
+                                tracing::warn!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated (DB record not found after update)");
                                 send_checkout_to_kafka(payload);
                             }
                         }
@@ -971,7 +972,7 @@ pub(crate) async fn handle_bect_commit(
                         conn_id,
                         request_id = fe_commit.request_id,
                         transport_trans_id = found_transport_trans_id,
-                        "[BECT] update returned false, no rows affected"
+                        "[COMMIT] update returned false, no rows affected"
                     );
                     // Vẫn update ETDR cache và gửi Kafka (reuse single fetch).
                     if let Some(mut etdr) = etdr_for_out_update.clone() {
@@ -1008,12 +1009,12 @@ pub(crate) async fn handle_bect_commit(
                             etdr.sync_status = 0;
                         }
                         save_etdr(etdr);
-                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated despite no rows affected");
+                        tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite no rows affected");
                         send_checkout_to_kafka(payload);
                     }
                 }
                 Err(e) => {
-                    tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[BECT] TRANSPORT_TRANSACTION_STAGE update failed");
+                    tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[COMMIT] TRANSPORT_TRANSACTION_STAGE update failed");
                     // Vẫn update ETDR cache và gửi Kafka (reuse single fetch).
                     if let Some(mut etdr) = etdr_for_out_update.clone() {
                         let now_ms = timestamp_ms();
@@ -1050,7 +1051,7 @@ pub(crate) async fn handle_bect_commit(
                         }
                         save_etdr(etdr);
                         tracing::warn!(
-                            conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[BECT] ETDR cache updated despite DB update failure"
+                            conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite DB update failure"
                         );
                         send_checkout_to_kafka(payload);
                     }
@@ -1069,7 +1070,7 @@ pub(crate) async fn handle_bect_commit(
                     error_detail = crate::utils::fe_status_detail(error_status),
                     flow = "COMMIT",
                     detail = "account check failed (subscriber not found or account inactive)",
-                    "[BECT] COMMIT failed"
+                    "[COMMIT] COMMIT failed"
                 );
                 let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
                 fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -1092,7 +1093,7 @@ pub(crate) async fn handle_bect_commit(
                 status = fe::NOT_FOUND_STATION_LANE,
                 error_detail = crate::utils::fe_status_detail(fe::NOT_FOUND_STATION_LANE),
                 detail = "invalid lane_type",
-                "[BECT] COMMIT failed"
+                "[COMMIT] COMMIT failed"
             );
             let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
             fe_resp.message_length = fe_protocol::response_header_status_len();
@@ -1116,7 +1117,7 @@ pub(crate) async fn handle_bect_commit(
         conn_id,
         request_id = fe_commit.request_id,
         status = fe_resp.status,
-        "[BECT] commit response"
+        "[COMMIT] commit response"
     );
     let step_serialize = Instant::now();
     let reply_bytes = serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
@@ -1126,13 +1127,13 @@ pub(crate) async fn handle_bect_commit(
         request_id = fe_commit.request_id,
         elapsed_ms,
         step = "serialize_and_encrypt_commit_response",
-        "[BECT] COMMIT step finished"
+        "[COMMIT] COMMIT step finished"
     );
     tracing::debug!(
         conn_id,
         request_id = fe_commit.request_id,
         reply_len = reply_bytes.len(),
-        "[BECT] sending FE_COMMIT_IN_RESP"
+        "[COMMIT] sending FE_COMMIT_IN_RESP"
     );
 
     Ok((reply_bytes, fe_resp.status))
