@@ -131,6 +131,7 @@ pub const FE_VALID_COMMANDS: &[i32] = &[
     fe::QUERY_VEHICLE_BOO, // 0x64 (1A)
     fe::CHECKOUT_RESERVE_BOO, // 0x98 (2AZ)
     fe::CHECKOUT_COMMIT_BOO, // 0x9A (3AZ)
+    fe::CHECKOUT_ROLLBACK_BOO, // 0x9C (3AZ)
 ];
 
 /// Returns response command_id for the given request command_id (FE protocol).
@@ -146,6 +147,7 @@ pub fn fe_response_command_id(command_id: i32) -> i32 {
         fe::QUERY_VEHICLE_BOO => fe::QUERY_VEHICLE_BOO_RESP,
         fe::CHECKOUT_RESERVE_BOO => fe::CHECKOUT_RESERVE_BOO_RESP,
         fe::CHECKOUT_COMMIT_BOO => fe::CHECKOUT_COMMIT_BOO_RESP,
+        fe::CHECKOUT_ROLLBACK_BOO => fe::CHECKOUT_ROLLBACK_BOO_RESP,
         _ => fe::CONNECT_RESP,
     }
 }
@@ -173,6 +175,8 @@ pub fn is_fe_command(cmd_id: i32) -> bool {
             | fe::CHECKOUT_RESERVE_BOO_RESP
             | fe::CHECKOUT_COMMIT_BOO
             | fe::CHECKOUT_COMMIT_BOO_RESP
+            | fe::CHECKOUT_ROLLBACK_BOO
+            | fe::CHECKOUT_ROLLBACK_BOO_RESP
     )
 }
 
@@ -199,6 +203,8 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::CHECKOUT_RESERVE_BOO_RESP => "FE_CHECKOUT_RESERVE_BOO_RESP", // 2BZ, 0x99
         fe::CHECKOUT_COMMIT_BOO => "FE_CHECKOUT_COMMIT_BOO",         // 3AZ, 0x9A
         fe::CHECKOUT_COMMIT_BOO_RESP => "FE_CHECKOUT_COMMIT_BOO_RESP", // 3BZ, 0x9B
+        fe::CHECKOUT_ROLLBACK_BOO => "FE_CHECKOUT_ROLLBACK_BOO",     // 3AZ, 0x9C
+        fe::CHECKOUT_ROLLBACK_BOO_RESP => "FE_CHECKOUT_ROLLBACK_BOO_RESP", // 3BZ, 0x9D
         _ => "UNKNOWN_COMMAND",
     }
 }

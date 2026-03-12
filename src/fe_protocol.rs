@@ -64,6 +64,8 @@ pub mod len {
     pub const CHECKOUT_RESERVE_BOO_MIN: usize = 203;
     /// CHECKOUT_COMMIT_BOO (3AZ) 2.3.1.7.19: fixed 188 bytes.
     pub const CHECKOUT_COMMIT_BOO: usize = 188;
+    /// CHECKOUT_ROLLBACK_BOO (3AZ) 2.3.1.7.21: fixed 178 bytes.
+    pub const CHECKOUT_ROLLBACK_BOO: usize = 178;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +192,12 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             lane: (128, 132),   // lane_out
             plate: (132, 152), // plate 20 bytes
         },
+        fe::CHECKOUT_ROLLBACK_BOO => FeBodyOffsets {
+            toll: (124, 128),   // station_out
+            etag: (60, 84),
+            lane: (128, 132),   // lane_out
+            plate: (132, 142),  // plate 10 bytes
+        },
         _ => FeBodyOffsets {
             toll: (48, 52),
             etag: (24, 48),
@@ -296,5 +304,10 @@ pub fn response_checkout_reserve_boo_resp_len() -> i32 {
 
 /// CHECKOUT_COMMIT_BOO_RESP (3BZ) 2.3.1.7.20: 96 bytes.
 pub fn response_checkout_commit_boo_resp_len() -> i32 {
+    96
+}
+
+/// CHECKOUT_ROLLBACK_BOO_RESP (3BZ) 2.3.1.7.22: 96 bytes.
+pub fn response_checkout_rollback_boo_resp_len() -> i32 {
     96
 }
