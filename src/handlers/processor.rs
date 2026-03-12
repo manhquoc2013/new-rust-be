@@ -23,6 +23,7 @@ use super::checkin::handle_checkin;
 use super::commit::handle_commit;
 use super::connect::handle_connect;
 use super::handshake::handle_handshake;
+use super::query_vehicle_boo::handle_query_vehicle_boo;
 use super::rollback::handle_rollback;
 use super::terminate::handle_terminate;
 
@@ -62,6 +63,23 @@ async fn build_fe_4byte_rejected_response(
         fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id).await?;
         buf.write_i32_le(status).await?;
         buf.resize(cap, 0);
+        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
+        Ok(wrap_encrypted_reply(encrypted))
+    } else if command_id == fe::QUERY_VEHICLE_BOO {
+        let cap = fe_protocol::response_query_vehicle_boo_resp_len() as usize;
+        let mut buf = Vec::with_capacity(cap);
+        buf.write_i32_le(fe_protocol::response_query_vehicle_boo_resp_len())
+            .await?;
+        buf.write_i32_le(resp_cmd).await?;
+        buf.write_i32_le(0).await?; // version_id
+        buf.write_i64_le(request_id).await?;
+        buf.write_i64_le(session_id).await?;
+        buf.write_i64_le(0_i64).await?; // timestamp
+        buf.write_i32_le(0).await?; // process_time
+        buf.resize(101, 0); // etag 24 + vehicle_type 4 + ticket_type 1 + register_vehicle_type 10 + seat 4 + weight_goods 4 + weight_all 4 + plate 10
+        buf.write_i32_le(status).await?; // status at offset 101
+        buf.write_i32_le(0).await?; // min_balance_status
+        buf.resize(cap, 0); // general1 8 + general2 16
         let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
         Ok(wrap_encrypted_reply(encrypted))
     } else {
@@ -661,6 +679,33 @@ pub async fn process_request(
             save_tcoc_response_if_applicable(
                 &ctx,
                 fe::TERMINATE_RESP,
+                &response,
+                Some(status),
+                None,
+                None,
+                None,
+                response_send_ms,
+            );
+            response
+        }
+        fe::QUERY_VEHICLE_BOO => {
+            tracing::debug!(
+                conn_id = ctx.conn_id,
+                request_id = ctx.request_id,
+                "[Processor] QUERY_VEHICLE_BOO"
+            );
+            let (response, status) = handle_query_vehicle_boo(
+                fe_request,
+                &data,
+                conn_id,
+                encryption_key,
+                RATING_DB.clone(),
+            )
+            .await?;
+            let response_send_ms = crate::utils::timestamp_ms();
+            save_tcoc_response_if_applicable(
+                &ctx,
+                fe::QUERY_VEHICLE_BOO_RESP,
                 &response,
                 Some(status),
                 None,

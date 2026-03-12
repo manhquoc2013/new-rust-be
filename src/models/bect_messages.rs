@@ -105,8 +105,56 @@ impl fmt::Debug for CHECKIN_RESERVE_BOO_RESP {
     }
 }
 
-// ============== QUERY_VEHICLE_BOO_RESP (0x65, 133 bytes) ==============
+// ============== QUERY_VEHICLE_BOO (1A, 0x64, 122 bytes) ==============
 
+/// QUERY_VEHICLE_BOO (1A) – Highway Back-End sends to Card-issuer Back-End to query vehicle and account status at station entry.
+/// Command ID: 100 (0x64). Size: 122 bytes. Spec: 2.3.1.7.13.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct QUERY_VEHICLE_BOO {
+    pub message_length: i32,   // 4 – 122
+    pub command_id: i32,       // 4 – 100
+    pub version_id: i32,       // 4
+    pub request_id: i64,       // 8
+    pub session_id: i64,       // 8
+    pub timestamp: i64,        // 8 – epoch ms when sending
+    pub tid: String,           // 24 – TID
+    pub etag: String,          // 24 – EPC/ETAG
+    pub station: i32,          // 4
+    pub lane: i32,             // 4
+    pub station_type: String,  // 1 – C: closed, O: open
+    pub lane_type: String,     // 1 – I: in, O: out; null for open station
+    pub min_balance: i32,      // 4 – required minimum balance, 0 = no requirement
+    pub general1: [u8; 8],     // 8
+    pub general2: [u8; 16],   // 16
+}
+
+impl fmt::Debug for QUERY_VEHICLE_BOO {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QUERY_VEHICLE_BOO")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("tid", &self.tid.trim_end_matches('\0'))
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("station", &self.station)
+            .field("lane", &self.lane)
+            .field("station_type", &self.station_type.trim_end_matches('\0'))
+            .field("lane_type", &self.lane_type.trim_end_matches('\0'))
+            .field("min_balance", &self.min_balance)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
+// ============== QUERY_VEHICLE_BOO_RESP (1B, 0x65, 133 bytes) ==============
+
+/// QUERY_VEHICLE_BOO_RESP (1B) – Card-issuer Back-End response to QUERY_VEHICLE_BOO (1A).
+/// Command ID: 101 (0x65). Size: 133 bytes. Spec: 2.3.1.7.14.
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct QUERY_VEHICLE_BOO_RESP {

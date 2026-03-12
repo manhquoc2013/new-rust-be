@@ -58,6 +58,8 @@ pub mod len {
     pub const COMMIT: usize = 98;
     /// ROLLBACK: 4+4+8+8 + ... + ticket_id 8 + ... = 90
     pub const ROLLBACK: usize = 90;
+    /// QUERY_VEHICLE_BOO (1A) 2.3.1.7.13: 4+4+4+8+8+8+24+24+4+4+1+1+4+8+16 = 122
+    pub const QUERY_VEHICLE_BOO: usize = 122;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +162,12 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             lane: (52, 56),
             plate: (56, 66),
         },
+        fe::QUERY_VEHICLE_BOO => FeBodyOffsets {
+            toll: (84, 88),
+            etag: (60, 84),
+            lane: (88, 92),
+            plate: (0, 0),
+        },
         fe::COMMIT | fe::ROLLBACK => FeBodyOffsets {
             toll: (48, 52),
             etag: (24, 48),
@@ -258,4 +266,9 @@ pub async fn write_shake_resp_body<W: AsyncWriteExt + Unpin>(
 /// Returns message_length for FE_CHECKIN_IN_RESP (i64: 4+4+8+8+4+24+4+4+4+4+4+4+4+10+4+4 = 98).
 pub fn response_checkin_in_resp_len() -> i32 {
     98
+}
+
+/// QUERY_VEHICLE_BOO_RESP (1B) 2.3.1.7.14: 133 bytes.
+pub fn response_query_vehicle_boo_resp_len() -> i32 {
+    133
 }

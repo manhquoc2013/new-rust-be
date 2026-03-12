@@ -122,13 +122,13 @@ pub mod fe {
 
 /// List of valid Front-End command IDs. Used in processor to validate incoming request.
 pub const FE_VALID_COMMANDS: &[i32] = &[
-    fe::CONNECT,   // 0x00
-    fe::HANDSHAKE, // 0x02
-    fe::CHECKIN,   // 0x04
-    fe::COMMIT,    // 0x06
-    fe::ROLLBACK,  // 0x08
-    fe::TERMINATE, // 0x0A
-                   // Other commands may be added if needed
+    fe::CONNECT,         // 0x6C
+    fe::HANDSHAKE,       // 0x1C
+    fe::CHECKIN,         // 0x66
+    fe::COMMIT,          // 0x68
+    fe::ROLLBACK,        // 0x6A
+    fe::TERMINATE,       // 0x70
+    fe::QUERY_VEHICLE_BOO, // 0x64 (1A)
 ];
 
 /// Returns response command_id for the given request command_id (FE protocol).
@@ -141,6 +141,7 @@ pub fn fe_response_command_id(command_id: i32) -> i32 {
         fe::CHECKIN => fe::CHECKIN_RESP,
         fe::COMMIT => fe::COMMIT_RESP,
         fe::ROLLBACK => fe::ROLLBACK_RESP,
+        fe::QUERY_VEHICLE_BOO => fe::QUERY_VEHICLE_BOO_RESP,
         _ => fe::CONNECT_RESP,
     }
 }
@@ -162,6 +163,8 @@ pub fn is_fe_command(cmd_id: i32) -> bool {
             | fe::ROLLBACK_RESP
             | fe::TERMINATE
             | fe::TERMINATE_RESP
+            | fe::QUERY_VEHICLE_BOO
+            | fe::QUERY_VEHICLE_BOO_RESP
     )
 }
 
@@ -182,6 +185,8 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::ROLLBACK_RESP => "FE_ROLLBACK_RESP", // Same as BOO CHECKIN_ROLLBACK_BOO_RESP (3B, 0x6B)
         fe::TERMINATE => "FE_TERMINATE",
         fe::TERMINATE_RESP => "FE_TERMINATE_RESP",
+        fe::QUERY_VEHICLE_BOO => "FE_QUERY_VEHICLE_BOO",
+        fe::QUERY_VEHICLE_BOO_RESP => "FE_QUERY_VEHICLE_BOO_RESP",
         _ => "UNKNOWN_COMMAND",
     }
 }
