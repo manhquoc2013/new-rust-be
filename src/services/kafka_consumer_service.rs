@@ -392,9 +392,7 @@ async fn consume_partition(
                                         .update_hub_id_by_transport_trans_id(ticket_in_id, hub_id)
                                 })
                                 .await
-                                .unwrap_or_else(|e| {
-                                    Err(DbError::ExecutionError(e.to_string()))
-                                });
+                                .unwrap_or_else(|e| Err(DbError::ExecutionError(e.to_string())));
                                 let ok_transport = r_transport.is_ok();
                                 let updated_etdr = get_etdr_cache()
                                     .update_hub_id_by_ticket_id(ticket_in_id, hub_id);
@@ -440,18 +438,16 @@ async fn consume_partition(
                                 };
                                 let repo_transport = Arc::clone(&repo_transport);
                                 let handle = tokio::spawn(async move {
-                                    let r_transport =
-                                        tokio::task::spawn_blocking(move || {
-                                            repo_transport
-                                                .update_hub_id_by_transport_trans_id(
-                                                    ticket_in_id,
-                                                    hub_id,
-                                                )
-                                        })
-                                        .await
-                                        .unwrap_or_else(|e| {
-                                            Err(DbError::ExecutionError(e.to_string()))
-                                        });
+                                    let r_transport = tokio::task::spawn_blocking(move || {
+                                        repo_transport.update_hub_id_by_transport_trans_id(
+                                            ticket_in_id,
+                                            hub_id,
+                                        )
+                                    })
+                                    .await
+                                    .unwrap_or_else(|e| {
+                                        Err(DbError::ExecutionError(e.to_string()))
+                                    });
                                     let ok_transport = r_transport.is_ok();
                                     let updated_etdr = get_etdr_cache()
                                         .update_hub_id_by_ticket_id(ticket_in_id, hub_id);

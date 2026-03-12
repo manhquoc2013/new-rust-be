@@ -2,7 +2,7 @@
 //!
 //! # REQUEST byte layout (i64 IDs: header 24 bytes)
 //!
-//! ## CONNECT (44 bytes) – 2.3.1.7.1
+//! ## CONNECT (2.3.1.7.1) – 44 bytes
 //! | Field        | Offset  |
 //! |--------------|---------|
 //! | msg_len      | 0..4    |
@@ -13,7 +13,18 @@
 //! | password     | 30..40  |
 //! | timeout      | 40..44  |
 //!
-//! ## HANDSHAKE / TERMINATE (24 bytes)
+//! ## CONNECT_RESP (2.3.1.7.2) – 32 bytes: msg_len, command_id, version_id, request_id, session_id, status.
+//!
+//! ## SHAKE (0C) 2.3.1.7.3 – 28 bytes
+//! | Field      | Offset  |
+//! |------------|---------|
+//! | msg_len    | 0..4    |
+//! | command_id | 4..8    |
+//! | version_id | 8..12   |
+//! | request_id | 12..20  |
+//! | session_id | 20..28  |
+//!
+//! ## TERMINATE (24 bytes)
 //! | Field      | Offset  |
 //! |------------|---------|
 //! | msg_len    | 0..4    |
@@ -36,8 +47,9 @@ use tokio::io::AsyncWriteExt;
 pub mod len {
     /// CONNECT (2.3.1.7.1): 4+4+4+8+10+10+4 = 44
     pub const CONNECT: usize = 44;
-    /// HANDSHAKE / TERMINATE: 4+4+8+8 = 24
-    pub const HANDSHAKE: usize = 24;
+    /// SHAKE (0C) 2.3.1.7.3: 4+4+4+8+8 = 28
+    pub const HANDSHAKE: usize = 28;
+    /// TERMINATE: 4+4+8+8 = 24
     pub const TERMINATE: usize = 24;
     /// CHECKIN: 4+4+8+8 + etag 24 + station 4 + lane 4 + plate 10 + tid 24 + hash 16 = 106
     pub const CHECKIN: usize = 106;
@@ -51,8 +63,8 @@ pub mod len {
 // Read: request_id, session_id (and ticket_id) from buffer (8-byte IDs)
 // ---------------------------------------------------------------------------
 
-/// Parse request_id and session_id from header after skipping first 8 bytes (message_length, command_id).
-/// Returns (request_id, session_id) as i64; buffer must be at least 24 bytes.
+/// Parse request_id and session_id after first 8 bytes (message_length, command_id).
+/// Buffer must be at least 24 bytes. For SHAKE (0C) use `parse_shake_ids` (28 bytes).
 pub fn parse_request_id_session_id(data: &[u8]) -> Option<(i64, i64)> {
     if data.len() < 24 {
         return None;
@@ -60,6 +72,17 @@ pub fn parse_request_id_session_id(data: &[u8]) -> Option<(i64, i64)> {
     let request_id = i64::from_le_bytes(data[8..16].try_into().ok()?);
     let session_id = i64::from_le_bytes(data[16..24].try_into().ok()?);
     Some((request_id, session_id))
+}
+
+/// Parse SHAKE (0C) 28-byte message: version_id 8..12, request_id 12..20, session_id 20..28.
+pub fn parse_shake_ids(data: &[u8]) -> Option<(i32, i64, i64)> {
+    if data.len() < 28 {
+        return None;
+    }
+    let version_id = i32::from_le_bytes(data[8..12].try_into().ok()?);
+    let request_id = i64::from_le_bytes(data[12..20].try_into().ok()?);
+    let session_id = i64::from_le_bytes(data[20..28].try_into().ok()?);
+    Some((version_id, request_id, session_id))
 }
 
 /// Offsets (start, end) for body fields: toll_id, etag, lane, plate (use slice data[start..end]).
@@ -141,10 +164,7 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
 }
 
 /// Returns ticket_id from COMMIT/ROLLBACK body; None if not COMMIT/ROLLBACK or data too short.
-pub fn parse_ticket_id_commit_rollback(
-    data: &[u8],
-    command_id: i32,
-) -> Option<i64> {
+pub fn parse_ticket_id_commit_rollback(data: &[u8], command_id: i32) -> Option<i64> {
     if command_id != fe::COMMIT && command_id != fe::ROLLBACK {
         return None;
     }
@@ -179,16 +199,34 @@ pub async fn write_fe_ticket_id<W: AsyncWriteExt + Unpin>(
     Ok(())
 }
 
-/// Returns message_length for response with only header + status (CONNECT_RESP, SHAKE_RESP, TERMINATE_RESP, COMMIT_RESP, ROLLBACK_RESP). 4+4+8+8+4 = 28.
+/// Message length for header+status only (TERMINATE_RESP, COMMIT_RESP, ROLLBACK_RESP): 28 bytes. SHAKE_RESP uses `SHAKE_RESP_LEN` (32).
 pub fn response_header_status_len() -> i32 {
     28
 }
 
-/// CONNECT_RESP (2.3.1.7.2): 32 bytes = message_length(4) + command_id(4) + version_id(4) + request_id(8) + session_id(8) + status(4).
+/// CONNECT_RESP (2.3.1.7.2): 32 bytes (message_length, command_id, version_id, request_id, session_id, status).
 pub const CONNECT_RESP_LEN: i32 = 32;
 
-/// Write CONNECT_RESP fields to buffer: version_id(4), request_id(8), session_id(8), status(4). Caller must have already written message_length(4) and command_id(4).
+/// SHAKE_RESP (0D) 2.3.1.7.4: 32 bytes (message_length, command_id, version_id, request_id, session_id, status).
+pub const SHAKE_RESP_LEN: i32 = 32;
+
+/// Write CONNECT_RESP body: version_id(4), request_id(8), session_id(8), status(4). Caller writes message_length and command_id first.
 pub async fn write_connect_resp_body<W: AsyncWriteExt + Unpin>(
+    w: &mut W,
+    version_id: i32,
+    request_id: i64,
+    session_id: i64,
+    status: i32,
+) -> io::Result<()> {
+    w.write_i32_le(version_id).await?;
+    w.write_i64_le(request_id).await?;
+    w.write_i64_le(session_id).await?;
+    w.write_i32_le(status).await?;
+    Ok(())
+}
+
+/// Write SHAKE_RESP body: version_id(4), request_id(8), session_id(8), status(4). Caller writes message_length and command_id first.
+pub async fn write_shake_resp_body<W: AsyncWriteExt + Unpin>(
     w: &mut W,
     version_id: i32,
     request_id: i64,

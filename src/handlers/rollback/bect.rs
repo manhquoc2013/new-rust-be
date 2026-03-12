@@ -33,8 +33,7 @@ pub(crate) async fn handle_bect_rollback(
         status = fe_resp.status,
         "[BECT] rollback response"
     );
-    let reply_bytes =
-        serialize_and_encrypt_rollback_response(&fe_resp, encryptor).await?;
+    let reply_bytes = serialize_and_encrypt_rollback_response(&fe_resp, encryptor).await?;
     tracing::debug!(
         conn_id,
         request_id = fe_rollback.request_id,

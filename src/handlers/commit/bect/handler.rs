@@ -100,8 +100,7 @@ pub(crate) async fn handle_bect_commit(
             fe_resp.request_id = fe_commit.request_id;
             fe_resp.session_id = conn_id as i64;
             fe_resp.status = fe::NOT_FOUND_STATION_LANE;
-            let reply_bytes =
-                serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
+            let reply_bytes = serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
             return Ok((reply_bytes, fe_resp.status));
         }
     };
@@ -154,8 +153,7 @@ pub(crate) async fn handle_bect_commit(
                     fe_resp.session_id = conn_id as i64;
                     fe_resp.status = fe::NOT_FOUND_ROUTE_TRANSACTION;
                     let reply_bytes =
-                        serialize_and_encrypt_commit_response(&fe_resp, encryptor)
-                            .await?;
+                        serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
                     return Ok((reply_bytes, fe_resp.status));
                 }
                 found_transport_trans_id = etdr.ticket_id;
@@ -264,17 +262,13 @@ pub(crate) async fn handle_bect_commit(
                                 "[BECT] COMMIT IN duplicate transaction, rejecting"
                             );
                             let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
-                            fe_resp.message_length =
-                                fe_protocol::response_header_status_len();
+                            fe_resp.message_length = fe_protocol::response_header_status_len();
                             fe_resp.command_id = fe::COMMIT_RESP;
                             fe_resp.request_id = fe_commit.request_id;
                             fe_resp.session_id = conn_id as i64;
                             fe_resp.status = dup_status;
-                            let reply_bytes = serialize_and_encrypt_commit_response(
-                                &fe_resp,
-                                encryptor,
-                            )
-                            .await?;
+                            let reply_bytes =
+                                serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
                             return Ok((reply_bytes, fe_resp.status));
                         }
                     }
@@ -498,15 +492,13 @@ pub(crate) async fn handle_bect_commit(
                             "[BECT] return error: transaction not found (no checkout time or already has commit)"
                         );
                         let mut fe_resp: FE_COMMIT_IN_RESP = FE_COMMIT_IN_RESP::default();
-                        fe_resp.message_length =
-                            fe_protocol::response_header_status_len();
+                        fe_resp.message_length = fe_protocol::response_header_status_len();
                         fe_resp.command_id = fe::COMMIT_RESP;
                         fe_resp.request_id = fe_commit.request_id;
                         fe_resp.session_id = conn_id as i64;
                         fe_resp.status = fe::NOT_FOUND_ROUTE_TRANSACTION;
                         let reply_bytes =
-                            serialize_and_encrypt_commit_response(&fe_resp, encryptor)
-                                .await?;
+                            serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
                         return Ok((reply_bytes, fe_resp.status));
                     }
                 } else {
@@ -573,8 +565,7 @@ pub(crate) async fn handle_bect_commit(
                                         fe_resp.session_id = conn_id as i64;
                                         fe_resp.status = fe::NOT_FOUND_ROUTE_TRANSACTION;
                                         let reply_bytes = serialize_and_encrypt_commit_response(
-                                            &fe_resp,
-                                            encryptor,
+                                            &fe_resp, encryptor,
                                         )
                                         .await?;
                                         return Ok((reply_bytes, fe_resp.status));
@@ -1109,8 +1100,7 @@ pub(crate) async fn handle_bect_commit(
             fe_resp.request_id = fe_commit.request_id;
             fe_resp.session_id = conn_id as i64;
             fe_resp.status = fe::NOT_FOUND_STATION_LANE;
-            let reply_bytes =
-                serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
+            let reply_bytes = serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
             return Ok((reply_bytes, fe_resp.status));
         }
     }
@@ -1129,8 +1119,7 @@ pub(crate) async fn handle_bect_commit(
         "[BECT] commit response"
     );
     let step_serialize = Instant::now();
-    let reply_bytes =
-        serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
+    let reply_bytes = serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
     let elapsed_ms = step_serialize.elapsed().as_millis() as u64;
     tracing::debug!(
         conn_id,

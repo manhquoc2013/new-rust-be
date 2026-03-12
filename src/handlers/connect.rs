@@ -1,6 +1,5 @@
-//! Handler CONNECT: tạo session, FE_CONNECT_RESP, cập nhật session map.
-//! - `handle_connect`: parse FE_CONNECT (44 byte per spec 2.3.1.7.1), xác thực user, tạo session DB, gửi FE_CONNECT_RESP (32 byte per spec 2.3.1.7.2).
-//!   Luồng: giải mã → kiểm tra format → auth (hoặc bypass) → sequence session_id → lưu TCOC_SESSIONS → gửi response.
+//! CONNECT handler: create session, send FE_CONNECT_RESP per spec 2.3.1.7.1 / 2.3.1.7.2.
+//! Flow: decrypt → validate length → auth (or bypass) → allocate session_id → save TCOC_SESSIONS → send CONNECT_RESP (32 bytes).
 
 use crate::configs::mediation_db::MEDIATION_DB;
 use crate::constants::fe;
@@ -18,7 +17,7 @@ use std::error::Error;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
-/// Sends FE_CONNECT_RESP with auth error status (301, 305, ...). Message length 32 bytes per spec 2.3.1.7.2.
+/// Sends FE_CONNECT_RESP with error status (e.g. 301, 305, 306). Message length 32 bytes (2.3.1.7.2).
 async fn send_connect_error(
     encryptor: &Aes128CbcEnc,
     version_id: i32,
@@ -63,8 +62,8 @@ async fn send_connect_error(
     Ok(wrap_encrypted_reply(encrypted_reply))
 }
 
-/// Xử lý CONNECT command.
-/// client_ip: địa chỉ IP client (FE/gate) để lưu vào TCOC_SESSIONS.IP_ADDRESS.
+/// Handles CONNECT: parse FE_CONNECT (44 bytes), authenticate, create session, return FE_CONNECT_RESP (32 bytes).
+/// `client_ip`: client (FE/gate) IP stored in TCOC_SESSIONS.IP_ADDRESS.
 pub async fn handle_connect(
     rq: FE_REQUEST,
     data: Vec<u8>,
@@ -100,8 +99,7 @@ pub async fn handle_connect(
         "[Network] FE_CONNECT decrypted"
     );
 
-    // Allocate SESSION_ID sớm để ghi TCOC_SESSIONS cả khi connect thành công hay thất bại.
-    // spawn_blocking tránh block runtime async (get_connection_with_retry + DB I/O).
+    // Allocate SESSION_ID early so TCOC_SESSIONS can be written on both success and failure. spawn_blocking avoids blocking async runtime (DB I/O).
     let session_id_from_seq = match tokio::task::spawn_blocking(|| {
         get_next_sequence_value_with_schema(&MEDIATION_DB, "MEDIATION_OWNER", "TCOC_SESSIONS_SEQ")
     })
@@ -162,13 +160,13 @@ pub async fn handle_connect(
                     if let Err(e) = TcocSessionService::new().save(&failure_session).await {
                         tracing::error!(session_id = session_id_from_seq, error = %e, "[Network] TCOC_SESSIONS save failure session failed");
                     }
-                return send_connect_error(
-                    &encryptor,
-                    fe_connect.version_id,
-                    fe_connect.request_id,
-                    fe::ACCOUNT_NOT_ACTIVATED,
-                )
-                .await;
+                    return send_connect_error(
+                        &encryptor,
+                        fe_connect.version_id,
+                        fe_connect.request_id,
+                        fe::ACCOUNT_NOT_ACTIVATED,
+                    )
+                    .await;
                 }
                 let mut hasher = sha1::Sha1::new();
                 hasher.update(password.as_bytes());
@@ -263,7 +261,7 @@ pub async fn handle_connect(
         tracing::info!(conn_id, request_id = fe_connect.request_id, username = %username, toll_id, "[Network] CONNECT_BYPASS_AUTH enabled");
     }
 
-    // Lưu TCOC_SESSIONS khi connect thành công: chỉ có login (logout cập nhật khi ngắt kết nối).
+    // Save TCOC_SESSIONS on successful connect; logout_datetime updated when connection closes.
     let new_session = TcocSession {
         session_id: session_id_from_seq,
         user_id: authenticated_user_id,

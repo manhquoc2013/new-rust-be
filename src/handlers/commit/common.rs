@@ -9,8 +9,8 @@ use crate::db::repositories::TransportTransStageTcdRepository;
 use crate::fe_protocol;
 use crate::models::TCOCmessages::FE_COMMIT_IN_RESP;
 use crate::models::VDTCmessages::RatingDetail as VDTCRatingDetail;
-use crate::models::ETDR::BOORatingDetail;
 use crate::models::ETDR::clear_etdr_after_transaction_complete;
+use crate::models::ETDR::BOORatingDetail;
 use crate::price_ticket_type::from_db_string;
 use crate::services::service::Service;
 use aes;
@@ -22,7 +22,7 @@ use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::Semaphore;
 
-use crate::utils::{timestamp_ms};
+use crate::utils::timestamp_ms;
 
 /// Serialize and encrypt FE_COMMIT_IN_RESP response.
 pub(crate) async fn serialize_and_encrypt_commit_response(

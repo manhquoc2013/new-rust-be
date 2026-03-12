@@ -7,7 +7,7 @@ use crate::cache::data::toll_fee_list_cache::get_toll_fee_list_context;
 use crate::configs::config::Config;
 use crate::configs::pool_factory::OdbcConnectionManager;
 use crate::configs::rating_db::RATING_DB;
-use crate::constants::{bect, fe, lane_type, checkin};
+use crate::constants::{bect, checkin, fe, lane_type};
 use crate::db::repositories::account_repository::get_account_for_charge;
 use crate::db::repositories::subscriber_repository::{get_subscriber_by_etag, SubscriberInfo};
 use crate::db::repositories::{
@@ -142,8 +142,7 @@ pub(crate) async fn handle_bect_checkin(
                     }
                     fe_resp.plate = plate;
                     tracing::debug!(request_id = fe_checkin.request_id, plate_source = plate_source, plate = %fe_resp.plate, "[BECT] checkout resp plate (already checked out)");
-                    let reply_bytes =
-                        serialize_and_encrypt_response(&fe_resp, encryptor).await?;
+                    let reply_bytes = serialize_and_encrypt_response(&fe_resp, encryptor).await?;
                     return Ok((reply_bytes, fe_resp.status));
                 }
 
@@ -245,11 +244,8 @@ pub(crate) async fn handle_bect_checkin(
                                 fe_resp.etag = fe_checkin.etag.clone();
                                 fe_resp.station = fe_checkin.station;
                                 fe_resp.lane = fe_checkin.lane;
-                                let reply_bytes = serialize_and_encrypt_response(
-                                    &fe_resp,
-                                    encryptor,
-                                )
-                                .await?;
+                                let reply_bytes =
+                                    serialize_and_encrypt_response(&fe_resp, encryptor).await?;
                                 return Ok((reply_bytes, fe_resp.status));
                             }
                         }
@@ -606,8 +602,7 @@ pub(crate) async fn handle_bect_checkin(
                     fe_resp.station = etdr.station_id;
                     fe_resp.lane = etdr.lane_id;
                     tracing::debug!(request_id = fe_checkin.request_id, plate_source = plate_source, plate = %fe_resp.plate, "[BECT] checkout resp plate (error path)");
-                    let reply_bytes =
-                        serialize_and_encrypt_response(&fe_resp, encryptor).await?;
+                    let reply_bytes = serialize_and_encrypt_response(&fe_resp, encryptor).await?;
                     return Ok((reply_bytes, fe_resp.status));
                 }
 
@@ -691,8 +686,7 @@ pub(crate) async fn handle_bect_checkin(
                             "[BECT] CHECKIN failed"
                         );
                         let reply_bytes =
-                            serialize_and_encrypt_response(&fe_resp, encryptor)
-                                .await?;
+                            serialize_and_encrypt_response(&fe_resp, encryptor).await?;
                         return Ok((reply_bytes, fe_resp.status));
                     }
                 }

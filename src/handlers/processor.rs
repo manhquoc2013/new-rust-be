@@ -57,8 +57,7 @@ async fn build_fe_4byte_rejected_response(
         buf.write_i32_le(fe_protocol::response_checkin_in_resp_len())
             .await?;
         buf.write_i32_le(resp_cmd).await?;
-        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id)
-            .await?;
+        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id).await?;
         buf.write_i32_le(status).await?;
         buf.resize(cap, 0);
         let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
@@ -69,8 +68,7 @@ async fn build_fe_4byte_rejected_response(
         buf.write_i32_le(fe_protocol::response_header_status_len())
             .await?;
         buf.write_i32_le(resp_cmd).await?;
-        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id)
-            .await?;
+        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id).await?;
         buf.write_i32_le(status).await?;
         let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
         Ok(wrap_encrypted_reply(encrypted))
@@ -319,14 +317,27 @@ pub async fn process_request(
         message_length as usize
     };
 
-    let (req_id, sess_id) = match fe_protocol::parse_request_id_session_id(&data) {
-        Some(pair) => pair,
-        None => {
-            tracing::error!(conn_id, data_len = data.len(), command_id = %format!("0x{:02X}", command_id), "[Processor] parse request_id/session_id failed");
-            return Err(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "FE request too short for header ids",
-            )));
+    let (req_id, sess_id) = if command_id == fe::HANDSHAKE {
+        match fe_protocol::parse_shake_ids(&data) {
+            Some((_, r, s)) => (r, s),
+            None => {
+                tracing::error!(conn_id, data_len = data.len(), command_id = %format!("0x{:02X}", command_id), "[Processor] parse SHAKE ids failed");
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "FE SHAKE message too short for header ids (need 28 bytes)",
+                )));
+            }
+        }
+    } else {
+        match fe_protocol::parse_request_id_session_id(&data) {
+            Some(pair) => pair,
+            None => {
+                tracing::error!(conn_id, data_len = data.len(), command_id = %format!("0x{:02X}", command_id), "[Processor] parse request_id/session_id failed");
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "FE request too short for header ids",
+                )));
+            }
         }
     };
     let fe_request = FE_REQUEST {
@@ -405,8 +416,8 @@ pub async fn process_request(
         None
     };
 
-    let tcoc_tid = fe_protocol::parse_ticket_id_commit_rollback(&data, command_id)
-        .map(|i| i.to_string());
+    let tcoc_tid =
+        fe_protocol::parse_ticket_id_commit_rollback(&data, command_id).map(|i| i.to_string());
 
     // request_received_ms already set above (right after fe_request) for accurate TCOC process_duration.
 
@@ -438,8 +449,7 @@ pub async fn process_request(
         });
     }
 
-    let response_ticket_id =
-        fe_protocol::parse_ticket_id_commit_rollback(&data, command_id);
+    let response_ticket_id = fe_protocol::parse_ticket_id_commit_rollback(&data, command_id);
 
     let ctx = RequestContext {
         conn_id,
@@ -485,14 +495,8 @@ pub async fn process_request(
             response
         }
         fe::HANDSHAKE => {
-            let response = handle_handshake(
-                fe_request,
-                data,
-                conn_id,
-                command_id,
-                encryption_key,
-            )
-            .await?;
+            let response =
+                handle_handshake(fe_request, data, conn_id, command_id, encryption_key).await?;
             let response_send_ms = crate::utils::timestamp_ms();
             save_tcoc_response_if_applicable(
                 &ctx,

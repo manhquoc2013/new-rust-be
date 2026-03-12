@@ -6,7 +6,7 @@ pub mod fe {
     pub const CONNECT: i32 = 0x6C;
 
     /// CONNECT_RESP - Server response to CONNECT - Msg length: 32 bytes
-    pub const CONNECT_RESP: i32 = 0x6D ;
+    pub const CONNECT_RESP: i32 = 0x6D;
 
     /// HANDSHAKE command - Client sends for handshake - Msg length: 28 bytes
     pub const HANDSHAKE: i32 = 0x1C;
@@ -62,7 +62,6 @@ pub mod fe {
     pub const CHECKOUT_ROLLBACK_BOO: i32 = 0x9C;
     /// CHECKOUT_ROLLBACK_BOO_RESP - Server response to CHECKOUT_ROLLBACK_BOO - Msg length: 96 bytes
     pub const CHECKOUT_ROLLBACK_BOO_RESP: i32 = 0x9D;
-
 
     /// FE status: 0=Success, 14..107=subscriber/account/etag, 200..304=transaction/route/price, 901..903=system/BOO integration.
     /// 301 NOT_FOUND_STATION_LANE - Lane not found for station; CONNECT: used for unauthorized (wrong password)

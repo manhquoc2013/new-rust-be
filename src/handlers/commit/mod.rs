@@ -69,17 +69,8 @@ pub async fn handle_commit(
 
     let _process_type_guard = ProcessTypeGuard::new(ProcessType::BETC);
 
-    tracing::debug!(
-        request_id = fe_commit.request_id,
-        "[Processor] COMMIT BECT"
-    );
-    bect::handle_bect_commit(
-        &fe_commit,
-        conn_id,
-        &encryptor,
-        db_pool,
-        cache,
-    )
-    .await
-    .map(|(r, s)| (r, s, false, direction, None))
+    tracing::debug!(request_id = fe_commit.request_id, "[Processor] COMMIT BECT");
+    bect::handle_bect_commit(&fe_commit, conn_id, &encryptor, db_pool, cache)
+        .await
+        .map(|(r, s)| (r, s, false, direction, None))
 }

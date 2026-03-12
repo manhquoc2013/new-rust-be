@@ -1,4 +1,4 @@
-//! Xử lý lệnh HANDSHAKE: giải mã FE_SHAKE, trả FE_SHAKE_RESP.
+//! SHAKE (0C) handler: parse FE_SHAKE (28 bytes), return FE_SHAKE_RESP (32 bytes) per spec 2.3.1.7.3 / 2.3.1.7.4.
 
 use crate::constants::fe;
 use crate::crypto::{create_encryptor_with_key, BlockEncryptMut, Pkcs7};
@@ -7,7 +7,7 @@ use crate::models::TCOCmessages::{FE_REQUEST, FE_SHAKE, FE_SHAKE_RESP};
 use std::error::Error;
 use tokio::io::AsyncWriteExt;
 
-/// Xử lý HANDSHAKE command (24-byte format).
+/// Handles SHAKE (0C): 28-byte request, 32-byte response including version_id.
 pub async fn handle_handshake(
     rq: FE_REQUEST,
     data: Vec<u8>,
@@ -27,7 +27,7 @@ pub async fn handle_handshake(
         .into());
     }
 
-    let (req_id, sess_id) = match fe_protocol::parse_request_id_session_id(&decrypted) {
+    let (version_id, req_id, sess_id) = match fe_protocol::parse_shake_ids(&decrypted) {
         Some(p) => p,
         None => {
             tracing::error!(
@@ -42,14 +42,16 @@ pub async fn handle_handshake(
     let mut fe_shake: FE_SHAKE = FE_SHAKE::default();
     fe_shake.message_length = rq.message_length;
     fe_shake.command_id = rq.command_id;
+    fe_shake.version_id = version_id;
     fe_shake.request_id = req_id;
     fe_shake.session_id = sess_id;
 
     let mut fe_shake_resp: FE_SHAKE_RESP = FE_SHAKE_RESP::default();
-    fe_shake_resp.message_length = fe_protocol::response_header_status_len();
+    fe_shake_resp.message_length = fe_protocol::SHAKE_RESP_LEN;
     fe_shake_resp.command_id = fe::SHAKE_RESP;
+    fe_shake_resp.version_id = fe_shake.version_id;
     fe_shake_resp.request_id = fe_shake.request_id;
-    fe_shake_resp.session_id = conn_id as i64;
+    fe_shake_resp.session_id = fe_shake.session_id;
     fe_shake_resp.status = 0;
 
     let cap = fe_shake_resp.message_length as usize;
@@ -58,13 +60,14 @@ pub async fn handle_handshake(
         .write_i32_le(fe_shake_resp.message_length)
         .await?;
     buffer_write.write_i32_le(fe_shake_resp.command_id).await?;
-    fe_protocol::write_fe_request_id_session_id(
+    fe_protocol::write_shake_resp_body(
         &mut buffer_write,
+        fe_shake_resp.version_id,
         fe_shake_resp.request_id,
         fe_shake_resp.session_id,
+        fe_shake_resp.status,
     )
     .await?;
-    buffer_write.write_i32_le(fe_shake_resp.status).await?;
 
     let encrypted_reply = encryptor
         .clone()

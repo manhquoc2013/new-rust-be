@@ -93,8 +93,7 @@ pub async fn handle_terminate(
         );
     }
 
-    let reply_bytes =
-        serialize_and_encrypt_terminate_response(&fe_resp, &encryptor).await?;
+    let reply_bytes = serialize_and_encrypt_terminate_response(&fe_resp, &encryptor).await?;
 
     tracing::debug!(
         conn_id,

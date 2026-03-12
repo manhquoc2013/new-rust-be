@@ -18,8 +18,7 @@ use crate::db::Repository;
 use crate::fe_protocol;
 use crate::models::TCOCmessages::{FE_CHECKIN, FE_CHECKIN_IN_RESP};
 use crate::models::ETDR::{
-    get_etdr_cache, get_latest_checkin_by_etag, save_bect_tcd_list_with_lock,
-    save_etdr, ETDR,
+    get_etdr_cache, get_latest_checkin_by_etag, save_bect_tcd_list_with_lock, save_etdr, ETDR,
 };
 use crate::services::transport_transaction_stage_service::TransportTransactionStageService;
 use crate::utils::{now_utc_db_string, timestamp_ms};

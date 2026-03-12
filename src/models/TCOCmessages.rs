@@ -24,7 +24,7 @@ impl fmt::Debug for FE_REQUEST {
 pub struct FE_CONNECT {
     pub message_length: i32,
     pub command_id: i32,
-    /// Protocol version (4 bytes).
+    /// Protocol version, 4 bytes. Total message 44 bytes (2.3.1.7.1).
     pub version_id: i32,
     pub request_id: i64,
     pub username: String,
@@ -48,10 +48,11 @@ impl fmt::Debug for FE_CONNECT {
 pub struct FE_CONNECT_RESP {
     pub message_length: i32,
     pub command_id: i32,
-    /// Protocol version (4 bytes).
+    /// Protocol version, 4 bytes. Total message 32 bytes (2.3.1.7.2).
     pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
+    /// 0: success; non-zero: auth/error code (e.g. 301, 305, 306).
     pub status: i32,
 }
 impl fmt::Debug for FE_CONNECT_RESP {
@@ -71,6 +72,8 @@ impl fmt::Debug for FE_CONNECT_RESP {
 pub struct FE_SHAKE {
     pub message_length: i32,
     pub command_id: i32,
+    /// Protocol version, 4 bytes. Total message 28 bytes (2.3.1.7.3).
+    pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
 }
@@ -79,6 +82,7 @@ impl fmt::Debug for FE_SHAKE {
         f.debug_struct("FE_SHAKE")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
             .field("session_id", &self.session_id)
             .finish()
@@ -88,8 +92,11 @@ impl fmt::Debug for FE_SHAKE {
 pub struct FE_SHAKE_RESP {
     pub message_length: i32,
     pub command_id: i32,
+    /// Protocol version, 4 bytes. Total message 32 bytes (2.3.1.7.4).
+    pub version_id: i32,
     pub request_id: i64,
     pub session_id: i64,
+    /// 0: success; 1: session expired, close connection.
     pub status: i32,
 }
 
@@ -98,6 +105,7 @@ impl fmt::Debug for FE_SHAKE_RESP {
         f.debug_struct("FE_SHAKE_RESP")
             .field("message_length", &self.message_length)
             .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
             .field("request_id", &self.request_id)
             .field("session_id", &self.session_id)
             .field("status", &self.status)
@@ -111,17 +119,17 @@ pub struct FE_CHECKIN {
     pub request_id: i64,
     pub session_id: i64,
 
-    /// Thông tin EPC của eTag, 24 bytes.
+    /// eTag EPC, 24 bytes.
     pub etag: String,
-    /// Mã trạm thu phí, 4 bytes.
+    /// Toll station code, 4 bytes.
     pub station: i32,
-    /// Mã làn xe đi qua (tùy chọn), 4 bytes.
+    /// Lane code (optional), 4 bytes.
     pub lane: i32,
-    /// Biển số xe do FE ghi nhận (tùy chọn), 10 bytes.
+    /// Plate number from FE, 10 bytes.
     pub plate: String,
-    /// Mã giao dịch từ đầu đọc thẻ (tùy chọn), 24 bytes.
+    /// Transaction id from reader (optional), 24 bytes.
     pub tid: String,
-    /// Giá trị bảo mật của thẻ eTag (tùy chọn), 16 bytes.
+    /// eTag security value (optional), 16 bytes.
     pub hash_value: String,
 }
 
@@ -148,27 +156,27 @@ pub struct FE_CHECKIN_IN_RESP {
     pub request_id: i64,
     pub session_id: i64,
 
-    /// Mã trạng thái giao dịch. 0 là thành công.
+    /// Status: 0 = success.
     pub status: i32,
-    /// Etag của phương tiện, 24 bytes.
+    /// Vehicle eTag, 24 bytes.
     pub etag: String,
-    /// Mã trạm, 4 bytes.
+    /// Station code, 4 bytes.
     pub station: i32,
-    /// Mã làn, 4 bytes.
+    /// Lane code, 4 bytes.
     pub lane: i32,
-    /// Mã vé của giao dịch do Back End tạo ra, 8 bytes (Long).
+    /// Ticket id from Back End, 8 bytes (Long).
     pub ticket_id: i64,
-    /// Loại vé (tháng, lượt, quý, năm), 4 bytes.
+    /// Ticket type (month, trip, quarter, year), 4 bytes.
     pub ticket_type: i32,
-    /// Giá cước sẽ bị trừ, 4 bytes.
+    /// Toll amount to deduct, 4 bytes.
     pub price: i32,
-    /// Loại phương tiện, 4 bytes.
+    /// Vehicle type, 4 bytes.
     pub vehicle_type: i32,
-    /// Biển số xe, 10 bytes.
+    /// Plate number, 10 bytes.
     pub plate: String,
-    /// Loại biển số (trắng, xanh, đỏ...), 4 bytes.
+    /// Plate type (white, blue, red, etc.), 4 bytes.
     pub plate_type: i32,
-    /// ID của loại giá vé miễn giảm, 4 bytes.
+    /// Discount price type id, 4 bytes.
     pub price_ticket_type: i32,
 }
 
@@ -194,35 +202,35 @@ impl fmt::Debug for FE_CHECKIN_IN_RESP {
     }
 }
 
-/// FE COMMIT (4.2.3.9) – Bản tin Front End gửi khi muốn thực hiện trừ tiền tài khoản xe qua trạm.
+/// FE COMMIT – Front End request to deduct vehicle account at station.
 ///
 /// **REQUEST HEADER**
-/// - Message Length = 98 (fix)
+/// - Message Length = 98 (fixed)
 /// - Command Id: 0x06
-/// - Request Id: Front End tạo duy nhất và truyền đến (Long, 8 bytes)
-/// - Session Id: Session phiên đăng nhập nhận được từ CONNECT RESP (Long, 8 bytes)
+/// - Request Id: unique from Front End (Long, 8 bytes)
+/// - Session Id: from CONNECT RESP (Long, 8 bytes)
 ///
-/// **REQUEST BODY** (layout bytes, theo spec)
+/// **REQUEST BODY** (byte layout per spec)
 ///
 /// | Field             | Bytes | Type   | Mandatory | Description |
 /// |-------------------|-------|--------|-----------|-------------|
-/// | Message Length    | 4     | Int    | M         | Kích thước bản tin: Fix = 98 bytes |
+/// | Message Length    | 4     | Int    | M         | Fixed 98 bytes |
 /// | Command Id        | 4     | Int    | M         | 0x06 |
-/// | Request Id        | 8     | Long   | M         | Thông tin duy nhất FE gửi đến |
-/// | Session Id        | 8     | Long   | M         | Session phiên đăng nhập, do BE trả về |
-/// | Etag              | 24    | String | M         | Thông tin EPC của etag của phương tiện |
-/// | Station           | 4     | Int    | M         | Mã trạm thu phí đang xử lý |
-/// | Lane              | 4     | Int    | O         | Mã làn xe đi qua; 0 nếu chưa xác định (cổng long môn xa) |
-/// | Ticket Id         | 8     | Long   | M         | Mã vé giao dịch FE nhận từ BE khi Reserve (CHECKIN RESP) |
-/// | Status            | 4     | Int    | M         | Trạng thái khớp biển số (so sánh ảnh) |
-/// | Plate             | 10    | String | O         | Biển số thực tế camera nhận được; có thể rỗng |
-/// | Image Count       | 4     | Int    | O         | Số lượng ảnh liên quan. Tên ảnh: TicketId_0x (X = Image Count) |
-/// | Vehicle Length    | 4     | Int    | O         | Chiều dài phương tiện (cm); 0 nếu không xác định (xe Rơ Mooc 20/40 feet) |
-/// | Transaction Amount| 4     | Int    | O         | Giá tiền thực tế FE tính. =0: BE trừ theo CHECKIN_RESP; ≠0: trừ theo số này |
-/// | Weight            | 4     | Int    | O         | Cân nặng trọng tải xe; 0 nếu chưa xác định |
-/// | Reason ID         | 4     | Int    | O         | Lý do commit/rollback, trạm đặc biệt; mặc định 0 |
+/// | Request Id        | 8     | Long   | M         | Unique id from FE |
+/// | Session Id        | 8     | Long   | M         | Session from BE |
+/// | Etag              | 24    | String | M         | Vehicle eTag EPC |
+/// | Station           | 4     | Int    | M         | Toll station in use |
+/// | Lane              | 4     | Int    | O         | Lane code; 0 if unknown |
+/// | Ticket Id         | 8     | Long   | M         | From CHECKIN RESP (Reserve) |
+/// | Status            | 4     | Int    | M         | Plate match status (image comparison) |
+/// | Plate             | 10    | String | O         | Actual plate from camera |
+/// | Image Count       | 4     | Int    | O         | Number of images; names TicketId_0x |
+/// | Vehicle Length    | 4     | Int    | O         | Length (cm); 0 if unknown |
+/// | Transaction Amount| 4     | Int    | O         | Amount FE calculated; 0 = use BE from CHECKIN_RESP |
+/// | Weight            | 4     | Int    | O         | Weight; 0 if unknown |
+/// | Reason ID         | 4     | Int    | O         | Commit/rollback reason; default 0 |
 ///
-/// **Tổng: 98 bytes** (4+4+8+8+24+4+4+8+4+10+4+4+4+4+4).
+/// **Total: 98 bytes**
 #[derive(Default)]
 pub struct FE_COMMIT_IN {
     pub message_length: i32,
@@ -230,27 +238,27 @@ pub struct FE_COMMIT_IN {
     pub request_id: i64,
     pub session_id: i64,
 
-    /// Etag: thông tin EPC của phương tiện, 24 bytes. (M)
+    /// eTag EPC, 24 bytes. (M)
     pub etag: String,
-    /// Station: mã trạm thu phí đang xử lý, 4 bytes. (M)
+    /// Toll station in use, 4 bytes. (M)
     pub station: i32,
-    /// Lane: làn thực tế khi xe đi qua (hậu kiểm, đảo làn/cổng xa), 4 bytes. (O) 0 nếu chưa xác định.
+    /// Lane when vehicle passed (optional), 4 bytes. (O) 0 if unknown.
     pub lane: i32,
-    /// Ticket Id: id giao dịch từ CHECKIN RESP, 8 bytes (Long). (M)
+    /// Ticket id from CHECKIN RESP, 8 bytes (Long). (M)
     pub ticket_id: i64,
-    /// Status: trạng thái so sánh ảnh biển số khớp/không khớp, 4 bytes. (M)
+    /// Plate match status (image comparison), 4 bytes. (M)
     pub status: i32,
-    /// Plate: biển số thực tế camera nhận được, 10 bytes. (O) Có thể rỗng.
+    /// Actual plate from camera, 10 bytes. (O) May be empty.
     pub plate: String,
-    /// Image Count: số lượng ảnh liên quan (tên ảnh TicketId_0x), 4 bytes. (O)
+    /// Image count; names TicketId_0x, 4 bytes. (O)
     pub image_count: i32,
-    /// Vehicle Length: chiều dài phương tiện (cm), 4 bytes. (O) 0 nếu không xác định.
+    /// Vehicle length (cm), 4 bytes. (O) 0 if unknown.
     pub vehicle_length: i32,
-    /// Transaction Amount: giá tiền thực tế FE tính; 0 = BE trừ theo CHECKIN_RESP, 4 bytes. (O)
+    /// Amount FE calculated; 0 = BE deducts per CHECKIN_RESP, 4 bytes. (O)
     pub transaction_amount: i32,
-    /// Weight: cân nặng trọng tải xe, 4 bytes. (O) 0 nếu chưa xác định.
+    /// Weight, 4 bytes. (O) 0 if unknown.
     pub weight: i32,
-    /// Reason ID: lý do commit/rollback, trạm đặc biệt; mặc định 0, 4 bytes. (O)
+    /// Commit/rollback reason, special stations; default 0, 4 bytes. (O)
     pub reason_id: i32,
 }
 
@@ -281,7 +289,7 @@ pub struct FE_COMMIT_IN_RESP {
     pub command_id: i32,
     pub request_id: i64,
     pub session_id: i64,
-    /// Trạng thái so sánh biển số (0: không khớp, 1: khớp, 2: không nhận dạng được), 4 bytes.
+    /// Plate match status (0: no match, 1: match, 2: unrecognized), 4 bytes.
     pub status: i32,
 }
 
@@ -304,23 +312,23 @@ pub struct FE_ROLLBACK {
     pub request_id: i64,
     pub session_id: i64,
 
-    /// Thông tin EPC của eTag, 24 bytes.
+    /// eTag EPC, 24 bytes.
     pub etag: String,
-    /// Mã trạm thu phí, 4 bytes.
+    /// Toll station code, 4 bytes.
     pub station: i32,
-    /// Mã làn xe đi qua (tùy chọn), 4 bytes. Một số trạm mà cổng long môn đặt xa, có thể chưa xác định được chính xác mã làn khi xe vào trạm thì sẽ nhập vào là 0.
+    /// Lane code (optional), 4 bytes. 0 if lane unknown at entry (e.g. remote gantry).
     pub lane: i32,
-    /// Mã vé giao dịch Front End nhận được từ Back End khi Checkin, 8 bytes (Long).
+    /// Ticket id from Back End (CHECKIN), 8 bytes (Long).
     pub ticket_id: i64,
-    /// Trạng thái khớp biển số, 4 bytes.
+    /// Plate match status, 4 bytes.
     pub status: i32,
-    /// Biển số thực tế (tùy chọn), 10 bytes. Có thể là NULL nếu Front End không nhận dạng được.
+    /// Actual plate (optional), 10 bytes. May be null if FE could not recognize.
     pub plate: String,
-    /// Số ảnh chụp phương tiện Front End chụp được (tùy chọn), 4 bytes. Tên ảnh sẽ là Ticket Id_0x (trong đó X = Image Count).
+    /// Image count (optional), 4 bytes. Names: TicketId_0x (X = Image Count).
     pub image_count: i32,
-    /// Cân nặng trọng tải xe (tùy chọn), 4 bytes. Nếu chưa xác định được cân nặng thì nhập vào là 0.
+    /// Weight (optional), 4 bytes. 0 if unknown.
     pub weight: i32,
-    /// Lý do commit/rollback, phục vụ cho một số trạm đặc biệt (tùy chọn), 4 bytes. Mặc định là 0.
+    /// Commit/rollback reason for special stations (optional), 4 bytes. Default 0.
     pub reason_id: i32,
 }
 
@@ -350,7 +358,7 @@ pub struct FE_ROLLBACK_RESP {
     pub command_id: i32,
     pub request_id: i64,
     pub session_id: i64,
-    /// Trạng thái rollback (0: thành công, khác 0: thất bại), 4 bytes.
+    /// Rollback status (0: success, non-zero: failure), 4 bytes.
     pub status: i32,
 }
 
@@ -391,7 +399,7 @@ pub struct FE_TERMINATE_RESP {
     pub command_id: i32,
     pub request_id: i64,
     pub session_id: i64,
-    /// Trạng thái terminate (0: thành công, khác 0: thất bại), 4 bytes.
+    /// Terminate status (0: success, non-zero: failure), 4 bytes.
     pub status: i32,
 }
 

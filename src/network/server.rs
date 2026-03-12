@@ -4,8 +4,7 @@ use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::config::Config;
 use crate::services::ip_block_service::IpBlockService;
 use crate::types::{
-    ConnectionId, ConnectionMap, EncryptionKeyMap, IncomingMessage,
-    SessionMap, SessionUpdate,
+    ConnectionId, ConnectionMap, EncryptionKeyMap, IncomingMessage, SessionMap, SessionUpdate,
 };
 use crate::utils::CompiledIpDenylist;
 use std::error::Error;
