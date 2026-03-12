@@ -55,9 +55,9 @@ pub mod fe {
     /// CHECKOUT_RESERVE_BOO_RESP - Server response to CHECKOUT_RESERVE_BOO - Msg length: 100 bytes
     pub const CHECKOUT_RESERVE_BOO_RESP: i32 = 0x99;
 
-    /// CHECKOUT_COMMIT_BOO command - Client sends for checkout commit boo - Msg length: 178 bytes
+    /// CHECKOUT_COMMIT_BOO command - Exit-station Back-End sends to card-issuer to request commit checkout. Spec 2.3.1.7.19. Msg length: 188 bytes.
     pub const CHECKOUT_COMMIT_BOO: i32 = 0x9A;
-    /// CHECKOUT_COMMIT_BOO_RESP - Server response to CHECKOUT_COMMIT_BOO - Msg length: 96 bytes
+    /// CHECKOUT_COMMIT_BOO_RESP - Card-issuer response to CHECKOUT_COMMIT_BOO. Spec 2.3.1.7.20. Msg length: 96 bytes. Command ID 155 (0x9B).
     pub const CHECKOUT_COMMIT_BOO_RESP: i32 = 0x9B;
 
     /// CHECKOUT_ROLLBACK_BOO command - Client sends for checkout rollback boo - Msg length: 178 bytes
@@ -130,6 +130,7 @@ pub const FE_VALID_COMMANDS: &[i32] = &[
     fe::TERMINATE,       // 0x70
     fe::QUERY_VEHICLE_BOO, // 0x64 (1A)
     fe::CHECKOUT_RESERVE_BOO, // 0x98 (2AZ)
+    fe::CHECKOUT_COMMIT_BOO, // 0x9A (3AZ)
 ];
 
 /// Returns response command_id for the given request command_id (FE protocol).
@@ -144,6 +145,7 @@ pub fn fe_response_command_id(command_id: i32) -> i32 {
         fe::ROLLBACK => fe::ROLLBACK_RESP,
         fe::QUERY_VEHICLE_BOO => fe::QUERY_VEHICLE_BOO_RESP,
         fe::CHECKOUT_RESERVE_BOO => fe::CHECKOUT_RESERVE_BOO_RESP,
+        fe::CHECKOUT_COMMIT_BOO => fe::CHECKOUT_COMMIT_BOO_RESP,
         _ => fe::CONNECT_RESP,
     }
 }
@@ -169,6 +171,8 @@ pub fn is_fe_command(cmd_id: i32) -> bool {
             | fe::QUERY_VEHICLE_BOO_RESP
             | fe::CHECKOUT_RESERVE_BOO
             | fe::CHECKOUT_RESERVE_BOO_RESP
+            | fe::CHECKOUT_COMMIT_BOO
+            | fe::CHECKOUT_COMMIT_BOO_RESP
     )
 }
 
@@ -193,6 +197,8 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::QUERY_VEHICLE_BOO_RESP => "FE_QUERY_VEHICLE_BOO_RESP",
         fe::CHECKOUT_RESERVE_BOO => "FE_CHECKOUT_RESERVE_BOO",       // 2AZ, 0x98
         fe::CHECKOUT_RESERVE_BOO_RESP => "FE_CHECKOUT_RESERVE_BOO_RESP", // 2BZ, 0x99
+        fe::CHECKOUT_COMMIT_BOO => "FE_CHECKOUT_COMMIT_BOO",         // 3AZ, 0x9A
+        fe::CHECKOUT_COMMIT_BOO_RESP => "FE_CHECKOUT_COMMIT_BOO_RESP", // 3BZ, 0x9B
         _ => "UNKNOWN_COMMAND",
     }
 }

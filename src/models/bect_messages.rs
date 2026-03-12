@@ -512,3 +512,104 @@ impl fmt::Debug for CHECKOUT_RESERVE_BOO_RESP {
             .finish()
     }
 }
+
+// ============== CHECKOUT_COMMIT_BOO (3AZ, 0x9A, 188 bytes) ==============
+
+/// CHECKOUT_COMMIT_BOO (3AZ) – Exit-station Back-End sends to card-issuer Back-End to request commit of checkout.
+/// Command ID: 154 (0x9A). Size: 188 bytes. Spec: 2.3.1.7.19.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct CHECKOUT_COMMIT_BOO {
+    pub message_length: i32,   // 4 – 188
+    pub command_id: i32,       // 4 – 154
+    pub version_id: i32,        // 4
+    pub request_id: i64,        // 8
+    pub session_id: i64,        // 8
+    pub timestamp: i64,         // 8 – epoch ms when sending
+    pub tid: String,            // 24 – TID
+    pub etag: String,           // 24 – EPC/ETAG
+    pub ticket_in_id: i64,      // 8 – entry station transaction ID
+    pub hub_id: i64,            // 8 – hub sync ID
+    pub ticket_out_id: i64,     // 8 – exit station transaction ID
+    pub ticket_eTag_id: i64,    // 8 – BOO card transaction ID
+    pub station_in: i32,        // 4 – entry station
+    pub lane_in: i32,           // 4 – entry lane
+    pub station_out: i32,       // 4 – exit station
+    pub lane_out: i32,          // 4 – exit lane
+    pub plate: String,          // 20 – plate number
+    pub trans_amount: i32,      // 4 – amount to deduct
+    /// Epoch datetime in seconds (per spec).
+    pub trans_datetime: i64,    // 8
+    pub general1: [u8; 8],      // 8
+    pub general2: [u8; 16],     // 16
+}
+
+impl fmt::Debug for CHECKOUT_COMMIT_BOO {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CHECKOUT_COMMIT_BOO")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("tid", &self.tid.trim_end_matches('\0'))
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("ticket_in_id", &self.ticket_in_id)
+            .field("hub_id", &self.hub_id)
+            .field("ticket_out_id", &self.ticket_out_id)
+            .field("ticket_eTag_id", &self.ticket_eTag_id)
+            .field("station_in", &self.station_in)
+            .field("lane_in", &self.lane_in)
+            .field("station_out", &self.station_out)
+            .field("lane_out", &self.lane_out)
+            .field("plate", &self.plate.trim_end_matches('\0'))
+            .field("trans_amount", &self.trans_amount)
+            .field("trans_datetime", &self.trans_datetime)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
+// ============== CHECKOUT_COMMIT_BOO_RESP (3BZ, 0x9B, 96 bytes) ==============
+
+/// CHECKOUT_COMMIT_BOO_RESP (3BZ) – Card-issuer Back-End response to CHECKOUT_COMMIT_BOO (3AZ).
+/// Command ID: 155 (0x9B). Size: 96 bytes. Spec: 2.3.1.7.20. Status 0 = success.
+#[allow(dead_code)]
+#[derive(Default)]
+pub struct CHECKOUT_COMMIT_BOO_RESP {
+    pub message_length: i32,  // 4 – 96
+    pub command_id: i32,      // 4 – 155
+    pub version_id: i32,       // 4
+    pub request_id: i64,       // 8
+    pub session_id: i64,       // 8
+    pub timestamp: i64,        // 8 – epoch ms when responding
+    pub ticket_in_id: i64,     // 8
+    pub hub_id: i64,          // 8
+    pub ticket_eTag_id: i64,   // 8
+    pub ticket_out_id: i64,    // 8
+    pub status: i32,           // 4 – 0: success
+    pub general1: [u8; 8],     // 8
+    pub general2: [u8; 16],    // 16
+}
+
+impl fmt::Debug for CHECKOUT_COMMIT_BOO_RESP {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CHECKOUT_COMMIT_BOO_RESP")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("ticket_in_id", &self.ticket_in_id)
+            .field("hub_id", &self.hub_id)
+            .field("ticket_eTag_id", &self.ticket_eTag_id)
+            .field("ticket_out_id", &self.ticket_out_id)
+            .field("status", &self.status)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
