@@ -20,6 +20,7 @@ use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
 use super::checkin::handle_checkin;
+use super::checkout_reserve::handle_checkout_reserve_boo;
 use super::commit::handle_commit;
 use super::connect::handle_connect;
 use super::handshake::handle_handshake;
@@ -79,6 +80,25 @@ async fn build_fe_4byte_rejected_response(
         buf.resize(101, 0); // etag 24 + vehicle_type 4 + ticket_type 1 + register_vehicle_type 10 + seat 4 + weight_goods 4 + weight_all 4 + plate 10
         buf.write_i32_le(status).await?; // status at offset 101
         buf.write_i32_le(0).await?; // min_balance_status
+        buf.resize(cap, 0); // general1 8 + general2 16
+        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
+        Ok(wrap_encrypted_reply(encrypted))
+    } else if command_id == fe::CHECKOUT_RESERVE_BOO {
+        let cap = fe_protocol::response_checkout_reserve_boo_resp_len() as usize;
+        let mut buf = Vec::with_capacity(cap);
+        buf.write_i32_le(fe_protocol::response_checkout_reserve_boo_resp_len())
+            .await?;
+        buf.write_i32_le(resp_cmd).await?;
+        buf.write_i32_le(0).await?; // version_id
+        buf.write_i64_le(request_id).await?;
+        buf.write_i64_le(session_id).await?;
+        buf.write_i64_le(0_i64).await?; // timestamp
+        buf.write_i32_le(0).await?; // process_time
+        buf.write_i64_le(0).await?; // ticket_in_id
+        buf.write_i64_le(0).await?; // hub_id
+        buf.write_i64_le(0).await?; // ticket_eTag_id
+        buf.write_i64_le(0).await?; // ticket_out_id
+        buf.write_i32_le(status).await?;
         buf.resize(cap, 0); // general1 8 + general2 16
         let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
         Ok(wrap_encrypted_reply(encrypted))
@@ -375,6 +395,7 @@ pub async fn process_request(
         || command_id == fe::CHECKIN
         || command_id == fe::COMMIT
         || command_id == fe::ROLLBACK
+        || command_id == fe::CHECKOUT_RESERVE_BOO
     {
         if off.toll.1 > off.toll.0 && data.len() >= off.toll.1 {
             Some(i32::from_le_bytes(data[off.toll.0..off.toll.1].try_into().unwrap()) as i64)
@@ -706,6 +727,45 @@ pub async fn process_request(
             save_tcoc_response_if_applicable(
                 &ctx,
                 fe::QUERY_VEHICLE_BOO_RESP,
+                &response,
+                Some(status),
+                None,
+                None,
+                None,
+                response_send_ms,
+            );
+            response
+        }
+        fe::CHECKOUT_RESERVE_BOO => {
+            tracing::debug!(
+                conn_id = ctx.conn_id,
+                request_id = ctx.request_id,
+                "[Processor] CHECKOUT_RESERVE_BOO"
+            );
+            let (response, status) = handle_checkout_reserve_boo(
+                fe_request,
+                &data,
+                conn_id,
+                encryption_key,
+            )
+            .await?;
+            let response_send_ms = crate::utils::timestamp_ms();
+            let ids = crate::utils::log_trace_ids(
+                ctx.request_id,
+                ctx.response_ticket_id,
+                ctx.etag_id.as_deref(),
+            );
+            tracing::info!(
+                conn_id = ctx.conn_id,
+                request_id = ctx.request_id,
+                etag = ?ctx.etag_id,
+                fe_status = status,
+                "{} [Processor] CHECKOUT_RESERVE_BOO finished",
+                ids
+            );
+            save_tcoc_response_if_applicable(
+                &ctx,
+                fe::CHECKOUT_RESERVE_BOO_RESP,
                 &response,
                 Some(status),
                 None,

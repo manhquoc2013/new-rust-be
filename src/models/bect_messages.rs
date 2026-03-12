@@ -399,8 +399,10 @@ impl fmt::Debug for ROLLBACK_BOO_RESP {
     }
 }
 
-// ============== CHECKOUT_RESERVE_BOO (variable) ==============
+// ============== CHECKOUT_RESERVE_BOO (2AZ, variable) ==============
 
+/// CHECKOUT_RESERVE_BOO (2AZ) – Exit-station Back-End sends to card-issuer Back-End to request reserve amount for checkout.
+/// Command ID: 152 (0x98). Size: variable (depends on rating_detail_line). Spec: 2.3.1.7.17.
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_RESERVE_BOO {
@@ -467,8 +469,10 @@ impl fmt::Debug for CHECKOUT_RESERVE_BOO {
     }
 }
 
-// ============== CHECKOUT_RESERVE_BOO_RESP (100 bytes) ==============
+// ============== CHECKOUT_RESERVE_BOO_RESP (2BZ, 100 bytes) ==============
 
+/// CHECKOUT_RESERVE_BOO_RESP (2BZ) – Card-issuer Back-End response to CHECKOUT_RESERVE_BOO (2AZ).
+/// Command ID: 153 (0x99). Size: 100 bytes. Spec: 2.3.1.7.18. Status 0 = success.
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_RESERVE_BOO_RESP {

@@ -60,6 +60,8 @@ pub mod len {
     pub const ROLLBACK: usize = 90;
     /// QUERY_VEHICLE_BOO (1A) 2.3.1.7.13: 4+4+4+8+8+8+24+24+4+4+1+1+4+8+16 = 122
     pub const QUERY_VEHICLE_BOO: usize = 122;
+    /// CHECKOUT_RESERVE_BOO (2AZ) minimum: fixed header through rating_detail_line + general1 + general2 (no rating_detail items) = 203
+    pub const CHECKOUT_RESERVE_BOO_MIN: usize = 203;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +176,12 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             lane: (52, 56),
             plate: (68, 78),
         },
+        fe::CHECKOUT_RESERVE_BOO => FeBodyOffsets {
+            toll: (140, 144),   // station_out
+            etag: (60, 84),
+            lane: (144, 148),  // lane_out
+            plate: (148, 158),
+        },
         _ => FeBodyOffsets {
             toll: (48, 52),
             etag: (24, 48),
@@ -271,4 +279,9 @@ pub fn response_checkin_in_resp_len() -> i32 {
 /// QUERY_VEHICLE_BOO_RESP (1B) 2.3.1.7.14: 133 bytes.
 pub fn response_query_vehicle_boo_resp_len() -> i32 {
     133
+}
+
+/// CHECKOUT_RESERVE_BOO_RESP (2BZ) 2.3.1.7.18: 100 bytes.
+pub fn response_checkout_reserve_boo_resp_len() -> i32 {
+    100
 }
