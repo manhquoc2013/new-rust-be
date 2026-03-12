@@ -2,7 +2,7 @@
 //! Each detail's toll_a/toll_b are the segment (TOLL_A, TOLL_B) from TOLL_STAGE for the stage used in pricing.
 
 use crate::cache::data::dto::subscription_history_dto::SubscriptionHistoryDto;
-use crate::models::VDTCmessages::RatingDetail;
+use crate::models::RatingDetail;
 
 use super::helpers::{
     effective_ticket_type, get_subscription_price_type, price_ticket_type_for_wb,

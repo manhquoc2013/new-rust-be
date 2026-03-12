@@ -195,7 +195,7 @@ pub(crate) fn ticket_type_i32_to_str(n: i32) -> String {
     }
 }
 
-/// Default PRICE_TICKET_TYPE when no source (VETC/VDTC QUERY_VEHICLE_BOO_RESP does not return this field).
+/// Default PRICE_TICKET_TYPE when no source (BOO QUERY_VEHICLE_BOO_RESP does not return this field).
 /// Used consistently for CHECKIN message and for fe_resp when no ETDR.
 #[allow(dead_code)]
 pub(crate) fn default_price_ticket_type() -> i32 {

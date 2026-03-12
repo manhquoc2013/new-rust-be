@@ -13,7 +13,7 @@ use crate::cache::config::cache_manager::CacheManager;
 use crate::cache::data::closed_cycle_transition_stage_cache::get_segments_for_leg;
 use crate::cache::data::dto::subscription_history_dto::SubscriptionHistoryDto;
 use crate::configs::pool_factory::OdbcConnectionManager;
-use crate::models::VDTCmessages::RatingDetail;
+use crate::models::RatingDetail;
 
 use super::error::TollFeeError;
 use super::flow::{

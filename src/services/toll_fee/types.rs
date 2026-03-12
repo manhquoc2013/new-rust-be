@@ -9,7 +9,7 @@ use crate::cache::config::cache_manager::CacheManager;
 use crate::cache::data::dto::price_dto::PriceDto;
 use crate::cache::data::dto::subscription_history_dto::SubscriptionHistoryDto;
 use crate::configs::pool_factory::OdbcConnectionManager;
-use crate::models::VDTCmessages::RatingDetail;
+use crate::models::RatingDetail;
 
 use super::helpers::segment_key;
 

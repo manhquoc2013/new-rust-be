@@ -4,7 +4,7 @@ use crate::cache::data::closed_cycle_transition_stage_cache::{
     get_segment_cycle_id, get_toll_a_toll_b_for_stage_id,
 };
 use crate::cache::data::dto::price_dto::PriceDto;
-use crate::models::VDTCmessages::RatingDetail;
+use crate::models::RatingDetail;
 
 use super::detail::{
     create_regular_rating_detail, create_subscription_rating_detail, create_whitelist_rating_detail,

@@ -11,12 +11,12 @@ impl ETDR {
         Self::default()
     }
 
-    /// Tạo ETDR từ FE_CHECKIN và VETC_CHECKIN_RESERVE_BOO_RESP
-    /// `ticket_id` là ticket_id đã được tạo khi gửi VETC_CHECKIN_RESERVE_BOO
+    /// Build ETDR from FE_CHECKIN and BOO CHECKIN_RESERVE_BOO_RESP (VETC path).
+    /// `ticket_id` is the ticket ID created when sending CHECKIN_RESERVE_BOO.
     pub fn from_checkin_vetc(
         fe_checkin: &crate::models::TCOCmessages::FE_CHECKIN,
-        vetc_checkin_resp: &crate::models::VETCmessages::VETC_CHECKIN_RESERVE_BOO_RESP,
-        vetc_query_resp: &crate::models::VETCmessages::VETC_QUERY_VEHICLE_BOO_RESP,
+        vetc_checkin_resp: &crate::models::bect_messages::CHECKIN_RESERVE_BOO_RESP,
+        vetc_query_resp: &crate::models::bect_messages::QUERY_VEHICLE_BOO_RESP,
         ticket_id: i64,
     ) -> Self {
         let now = timestamp_ms();
@@ -123,12 +123,12 @@ impl ETDR {
         }
     }
 
-    /// Tạo ETDR từ FE_CHECKIN và VDTC_CHECKIN_RESERVE_BOO_RESP.
-    /// ticket_id: ID từ sequence/cache (BOO_TRANSPORT_TRANS_STAGE.transport_trans_id).
+    /// Build ETDR from FE_CHECKIN and BOO CHECKIN_RESERVE_BOO_RESP (VDTC path).
+    /// ticket_id: ID from sequence/cache (BOO_TRANSPORT_TRANS_STAGE.transport_trans_id).
     pub fn from_checkin(
         fe_checkin: &crate::models::TCOCmessages::FE_CHECKIN,
-        vdtc_checkin_resp: &crate::models::VDTCmessages::VDTC_CHECKIN_RESERVE_BOO_RESP,
-        vdtc_query_resp: &crate::models::VDTCmessages::VDTC_QUERY_VEHICLE_BOO_RESP,
+        vdtc_checkin_resp: &crate::models::bect_messages::CHECKIN_RESERVE_BOO_RESP,
+        vdtc_query_resp: &crate::models::bect_messages::QUERY_VEHICLE_BOO_RESP,
         ticket_id: i64,
     ) -> Self {
         let now = timestamp_ms();

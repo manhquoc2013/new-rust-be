@@ -5,10 +5,10 @@ use crate::utils::timestamp_ms;
 use super::ETDR;
 
 impl ETDR {
-    /// Cập nhật thông tin commit từ VDTC_COMMIT_BOO_RESP
+    /// Update ETDR from BOO COMMIT_BOO_RESP (commit step).
     pub fn update_from_commit(
         &mut self,
-        vdtc_commit_resp: &crate::models::VDTCmessages::VDTC_COMMIT_BOO_RESP,
+        vdtc_commit_resp: &crate::models::bect_messages::COMMIT_BOO_RESP,
     ) {
         let now = timestamp_ms();
 
@@ -18,10 +18,10 @@ impl ETDR {
         self.ref_trans_id = vdtc_commit_resp.ref_trans_id;
     }
 
-    /// Cập nhật thông tin commit từ VETC_COMMIT_BOO_RESP
+    /// Update ETDR from BOO COMMIT_BOO_RESP (VETC path; same type as VDTC).
     pub fn update_from_commit_vetc(
         &mut self,
-        vetc_commit_resp: &crate::models::VETCmessages::VETC_COMMIT_BOO_RESP,
+        vetc_commit_resp: &crate::models::bect_messages::COMMIT_BOO_RESP,
     ) {
         let now = timestamp_ms();
 
@@ -31,11 +31,11 @@ impl ETDR {
         self.ref_trans_id = vetc_commit_resp.ref_trans_id;
     }
 
-    /// Cập nhật thông tin checkout từ VETC_CHECKOUT_RESERVE_BOO và VETC_CHECKOUT_RESERVE_BOO_RESP
+    /// Update ETDR from BOO CHECKOUT_RESERVE_BOO and CHECKOUT_RESERVE_BOO_RESP (VETC path).
     pub fn update_from_checkout_vetc(
         &mut self,
-        vetc_checkout: &crate::models::VETCmessages::VETC_CHECKOUT_RESERVE_BOO,
-        vetc_checkout_resp: &crate::models::VETCmessages::VETC_CHECKOUT_RESERVE_BOO_RESP,
+        vetc_checkout: &crate::models::bect_messages::CHECKOUT_RESERVE_BOO,
+        vetc_checkout_resp: &crate::models::bect_messages::CHECKOUT_RESERVE_BOO_RESP,
     ) {
         let now = timestamp_ms();
 
@@ -58,11 +58,11 @@ impl ETDR {
         self.boo_lane_type = Some("O".to_string());
     }
 
-    /// Cập nhật thông tin checkout từ VDTC_CHECKOUT_RESERVE_BOO và VDTC_CHECKOUT_RESERVE_BOO_RESP
+    /// Update ETDR from BOO CHECKOUT_RESERVE_BOO and CHECKOUT_RESERVE_BOO_RESP (VDTC path).
     pub fn update_from_checkout(
         &mut self,
-        vdtc_checkout: &crate::models::VDTCmessages::VDTC_CHECKOUT_RESERVE_BOO,
-        vdtc_checkout_resp: &crate::models::VDTCmessages::VDTC_CHECKOUT_RESERVE_BOO_RESP,
+        vdtc_checkout: &crate::models::bect_messages::CHECKOUT_RESERVE_BOO,
+        vdtc_checkout_resp: &crate::models::bect_messages::CHECKOUT_RESERVE_BOO_RESP,
     ) {
         let now = timestamp_ms();
 

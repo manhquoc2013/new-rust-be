@@ -7,7 +7,7 @@ use crate::cache::data::closed_cycle_transition_stage_cache::{
 };
 use crate::cache::data::dto::price_dto::PriceDto;
 use crate::cache::data::price_cache::{get_price, get_price_by_stage_id};
-use crate::models::VDTCmessages::RatingDetail;
+use crate::models::RatingDetail;
 
 use super::detail::{
     create_regular_rating_detail, create_subscription_rating_detail, create_whitelist_rating_detail,

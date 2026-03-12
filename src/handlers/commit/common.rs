@@ -8,7 +8,7 @@ use crate::crypto::Pkcs7;
 use crate::db::repositories::TransportTransStageTcdRepository;
 use crate::fe_protocol;
 use crate::models::TCOCmessages::FE_COMMIT_IN_RESP;
-use crate::models::VDTCmessages::RatingDetail as VDTCRatingDetail;
+use crate::models::RatingDetail as VDTCRatingDetail;
 use crate::models::ETDR::clear_etdr_after_transaction_complete;
 use crate::models::ETDR::BOORatingDetail;
 use crate::price_ticket_type::from_db_string;
