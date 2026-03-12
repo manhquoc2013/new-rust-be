@@ -2,7 +2,7 @@
 
 mod handler;
 pub(crate) mod common;
-mod kafka_payload;
+pub(crate) mod kafka_payload;
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;

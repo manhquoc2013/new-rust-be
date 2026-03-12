@@ -47,9 +47,6 @@ pub struct Config {
     /// Danh sách pattern IP bị từ chối kết nối (denylist). Hỗ trợ: 10.10.10.10, 10.10.*, 10.*. Từ chối ngay, không ghi log.
     pub ip_denylist: Vec<String>,
 
-    /// Chỉ chấp nhận bản tin FE 8-byte (request_id/session_id i64). Nếu true, bản tin 4-byte bị từ chối và trả về lỗi FE_MESSAGE_FORMAT_4BYTE_REJECTED (16).
-    pub fe_require_8byte_ids: bool,
-
     /// Bypass thiếu bảng giá/cung đường: khi true, nếu không tìm thấy bảng giá hoặc cung đường thì vẫn cho tính phí 0đ và tiếp tục (không trả NOT_FOUND_PRICE_INFO).
     pub allow_zero_fee_when_no_price_or_route: bool,
 
@@ -150,9 +147,6 @@ impl Config {
             })
             .unwrap_or_default();
 
-        let fe_require_8byte_ids =
-            crate::utils::parse_env_bool_loose(env::var("FE_REQUIRE_8BYTE_IDS").ok().as_deref());
-
         let allow_zero_fee_when_no_price_or_route = crate::utils::parse_env_bool_loose(
             env::var("ALLOW_ZERO_FEE_WHEN_NO_PRICE_OR_ROUTE")
                 .ok()
@@ -187,7 +181,6 @@ impl Config {
             ip_block_failure_threshold,
             ip_block_duration_seconds,
             ip_denylist,
-            fe_require_8byte_ids,
             allow_zero_fee_when_no_price_or_route,
             bect_minimum_balance_checkin,
             bect_minimum_balance_checkin_open_only,

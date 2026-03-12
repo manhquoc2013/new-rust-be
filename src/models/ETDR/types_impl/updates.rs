@@ -108,4 +108,27 @@ impl ETDR {
             self.plate = fe_checkin.plate.trim().to_string();
         }
     }
+
+    /// Update ETDR from CHECKOUT_RESERVE_BOO (BECT local checkout at exit station).
+    pub fn update_from_checkout_local_boo(
+        &mut self,
+        req: &crate::models::bect_messages::CHECKOUT_RESERVE_BOO,
+        trans_amount: i32,
+    ) {
+        let now = timestamp_ms();
+
+        self.status = 0;
+        self.checkout_datetime = now;
+        self.time_route_checkout = now;
+        self.time_update = now;
+        self.toll_out = req.station_out;
+        self.lane_out = req.lane_out;
+        self.price = trans_amount;
+        self.boo_trans_amount = trans_amount;
+        self.boo_trans_datetime = Some(now);
+        self.boo_lane_type = Some("O".to_string());
+        if !req.plate.trim().is_empty() {
+            self.plate = req.plate.trim().to_string();
+        }
+    }
 }

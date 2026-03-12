@@ -365,6 +365,7 @@ fn parse_datetime_to_ms(s: Option<&String>) -> i64 {
 }
 
 /// Pending record (not checkout) chosen from sync or main table; compare time to take the closer one.
+#[allow(clippy::large_enum_variant)]
 enum BestPendingRecord {
     Sync(TransportTransStageSync, Vec<TransportTransStageSyncDt>),
     Bect(TransportTransactionStage),

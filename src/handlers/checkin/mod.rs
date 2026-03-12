@@ -18,7 +18,8 @@ use std::sync::Arc;
 
 use common::{serialize_and_encrypt_response, PLATE_EMPTY_SENTINEL};
 
-/// Tạo response lỗi NOT_FOUND_STATION_LANE cho CHECKIN (toll/lane không tồn tại hoặc lane_type không hợp lệ).
+/// Tạo response lỗi cho CHECKIN (toll/lane không tồn tại, lane_type không hợp lệ, hoặc OUT lane từ chối).
+/// When status_override is Some(s), use s; otherwise use NOT_FOUND_STATION_LANE.
 async fn build_checkin_not_found_response(
     fe_checkin: &FE_CHECKIN,
     conn_id: i32,
@@ -26,6 +27,7 @@ async fn build_checkin_not_found_response(
     encryptor: &cbc::Encryptor<aes::Aes128>,
     db_pool: Arc<Pool<OdbcConnectionManager>>,
     cache: Arc<CacheManager>,
+    status_override: Option<i32>,
 ) -> Result<(Vec<u8>, i32, Option<String>), Box<dyn Error>> {
     let direction = crate::handlers::roaming::get_direction_from_lane(
         Some(toll_id_for_direction),
@@ -39,7 +41,7 @@ async fn build_checkin_not_found_response(
     fe_resp.command_id = fe::CHECKIN_RESP;
     fe_resp.request_id = fe_checkin.request_id;
     fe_resp.session_id = conn_id as i64;
-    fe_resp.status = fe::NOT_FOUND_STATION_LANE;
+    fe_resp.status = status_override.unwrap_or(fe::NOT_FOUND_STATION_LANE);
     fe_resp.etag = fe_checkin.etag.clone();
     fe_resp.station = fe_checkin.station;
     fe_resp.lane = fe_checkin.lane;
@@ -105,6 +107,7 @@ pub async fn handle_checkin(
                 &encryptor,
                 db_pool.clone(),
                 cache.clone(),
+                None,
             )
             .await?;
             return Ok((reply_bytes, status, false, direction, None));
@@ -134,6 +137,7 @@ pub async fn handle_checkin(
                 &encryptor,
                 db_pool.clone(),
                 cache.clone(),
+                None,
             )
             .await?;
             return Ok((reply_bytes, status, false, direction, None));
@@ -143,7 +147,32 @@ pub async fn handle_checkin(
     let lane_type_str = &toll_lane.lane_type;
     match lane_type_str.as_str() {
         lane_type::IN => {}
-        lane_type::OUT => {}
+        lane_type::OUT => {
+            tracing::warn!(
+                conn_id,
+                request_id = fe_checkin.request_id,
+                station = fe_checkin.station,
+                lane = fe_checkin.lane,
+                "[Checkin] OUT lane rejected: use CHECKOUT_RESERVE_BOO for exit"
+            );
+            let (reply_bytes, status, direction) = build_checkin_not_found_response(
+                &fe_checkin,
+                conn_id,
+                _toll.toll_id as i64,
+                &encryptor,
+                db_pool.clone(),
+                cache.clone(),
+                Some(fe::NOT_FOUND_ROUTE_TRANSACTION),
+            )
+            .await?;
+            return Ok((
+                reply_bytes,
+                status,
+                false,
+                direction,
+                None,
+            ));
+        }
         _ => {
             tracing::error!(conn_id, request_id = fe_checkin.request_id, lane_type = %lane_type_str, "[Processor] Invalid lane_type (expected IN/OUT)");
             let (reply_bytes, status, direction) = build_checkin_not_found_response(
@@ -153,6 +182,7 @@ pub async fn handle_checkin(
                 &encryptor,
                 db_pool.clone(),
                 cache.clone(),
+                None,
             )
             .await?;
             return Ok((reply_bytes, status, false, direction, None));

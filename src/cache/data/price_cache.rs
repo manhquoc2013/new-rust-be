@@ -27,7 +27,7 @@ static STAGE_PRICE_MEMORY: Lazy<DashMap<(i64, String), PriceDto>> = Lazy::new(Da
 fn replace_all_prices(data: Vec<(String, PriceDto)>) {
     let map: HashMap<_, _> = data.iter().cloned().collect();
     let mut stage_map = HashMap::new();
-    for (_, dto) in &map {
+    for dto in map.values() {
         let sid = dto.stage_id.unwrap_or(0);
         let vt = dto.vehicle_type.as_deref().unwrap_or("None").to_string();
         stage_map.insert((sid, vt), dto.clone());

@@ -456,4 +456,75 @@ impl TransportTransactionStageService {
             Err(e) => Err(ServiceError::Other(format!("Task join error: {}", e))),
         }
     }
+
+    /// Cập nhật checkout commit (BECT): set CHECKOUT_COMMIT_DATETIME, CHARGE_STATUS, v.v.
+    pub async fn update_checkout_commit(
+        &self,
+        transport_trans_id: i64,
+        checkout_commit_datetime: &str,
+        checkout_img_count: i32,
+        last_update: &str,
+        charge_status: &str,
+        checkout_status: Option<&str>,
+        fe_reason_id: Option<i64>,
+        checkout_datetime: Option<&str>,
+        img_count: Option<i32>,
+        checkout_plate_status: Option<&str>,
+        checkout_plate: Option<&str>,
+        sync_status: Option<i64>,
+    ) -> Result<bool, ServiceError> {
+        let repo = self.repository.clone();
+        let checkout_commit_datetime_owned = checkout_commit_datetime.to_string();
+        let last_update_owned = last_update.to_string();
+        let charge_status_owned = charge_status.to_string();
+        let checkout_status_owned = checkout_status.map(|s| s.to_string());
+        let checkout_datetime_owned = checkout_datetime.map(|s| s.to_string());
+        let checkout_plate_status_owned = checkout_plate_status.map(|s| s.to_string());
+        let checkout_plate_owned = checkout_plate.map(|s| s.to_string());
+
+        let start = std::time::Instant::now();
+        let update_result = tokio::task::spawn_blocking(move || {
+            repo.update_checkout_commit(
+                transport_trans_id,
+                &checkout_commit_datetime_owned,
+                checkout_img_count,
+                &last_update_owned,
+                &charge_status_owned,
+                checkout_status_owned.as_deref(),
+                fe_reason_id,
+                checkout_datetime_owned.as_deref(),
+                img_count,
+                checkout_plate_status_owned.as_deref(),
+                checkout_plate_owned.as_deref(),
+                sync_status,
+            )
+        })
+        .await;
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        let id_s = transport_trans_id.to_string();
+        crate::logging::log_db_time(
+            "UPDATE",
+            elapsed_ms,
+            Some("TRANSPORT_TRANSACTION_STAGE"),
+            Some(id_s.as_str()),
+        );
+        match update_result {
+            Ok(result) => match result {
+                Ok(updated) => {
+                    if updated {
+                        let cache_key =
+                            generate_cache_key("transport_transaction_stage", transport_trans_id);
+                        let _ = self.memory_cache.remove(&cache_key);
+                        let _ = self.distributed_cache.remove(&cache_key).await;
+                    }
+                    Ok(updated)
+                }
+                Err(e) => {
+                    tracing::error!(transport_trans_id, error = %e, "[DB] TRANSPORT_TRANSACTION_STAGE update_checkout_commit failed");
+                    Err(ServiceError::DatabaseError(e))
+                }
+            },
+            Err(e) => Err(ServiceError::Other(format!("Task join error: {}", e))),
+        }
+    }
 }

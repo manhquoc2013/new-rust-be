@@ -7,17 +7,14 @@
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::rating_db::RATING_DB;
 use crate::constants::{fe, fe_response_command_id, FE_VALID_COMMANDS};
-use crate::crypto::{create_encryptor_with_key, BlockEncryptMut, Pkcs7};
 use crate::fe_protocol;
 use crate::models::TCOCmessages::FE_REQUEST;
 use crate::services::{TcocRequestService, TcocResponseService};
 use crate::types::{SessionUpdate, SessionUpdateSender};
 use crate::utils::is_toll_id_valid;
-use crate::utils::wrap_encrypted_reply;
 use std::error::Error;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::io::AsyncWriteExt;
 
 use super::checkin::handle_checkin;
 use super::checkout_commit::handle_checkout_commit_boo;
@@ -44,113 +41,6 @@ struct RequestContext {
     response_ticket_id: Option<i64>,
     /// ID of TCOC_REQUEST row for this invocation; when request_id is reused (e.g. retry), used to update the correct row.
     tcoc_request_id: Option<i64>,
-}
-
-/// Build error response when rejecting FE 4-byte message (FE_REQUIRE_8BYTE_IDS=1): header + status FE_MESSAGE_FORMAT_4BYTE_REJECTED.
-async fn build_fe_4byte_rejected_response(
-    command_id: i32,
-    request_id: i64,
-    session_id: i64,
-    encryption_key: &str,
-) -> Result<Vec<u8>, Box<dyn Error>> {
-    let encryptor = create_encryptor_with_key(encryption_key);
-    let resp_cmd = fe_response_command_id(command_id);
-    let status = fe::FE_MESSAGE_FORMAT_4BYTE_REJECTED;
-
-    if command_id == fe::CHECKIN {
-        let cap = fe_protocol::response_checkin_in_resp_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_checkin_in_resp_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id).await?;
-        buf.write_i32_le(status).await?;
-        buf.resize(cap, 0);
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    } else if command_id == fe::QUERY_VEHICLE_BOO {
-        let cap = fe_protocol::response_query_vehicle_boo_resp_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_query_vehicle_boo_resp_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        buf.write_i32_le(0).await?; // version_id
-        buf.write_i64_le(request_id).await?;
-        buf.write_i64_le(session_id).await?;
-        buf.write_i64_le(0_i64).await?; // timestamp
-        buf.write_i32_le(0).await?; // process_time
-        buf.resize(101, 0); // etag 24 + vehicle_type 4 + ticket_type 1 + register_vehicle_type 10 + seat 4 + weight_goods 4 + weight_all 4 + plate 10
-        buf.write_i32_le(status).await?; // status at offset 101
-        buf.write_i32_le(0).await?; // min_balance_status
-        buf.resize(cap, 0); // general1 8 + general2 16
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    } else if command_id == fe::CHECKOUT_RESERVE_BOO {
-        let cap = fe_protocol::response_checkout_reserve_boo_resp_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_checkout_reserve_boo_resp_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        buf.write_i32_le(0).await?; // version_id
-        buf.write_i64_le(request_id).await?;
-        buf.write_i64_le(session_id).await?;
-        buf.write_i64_le(0_i64).await?; // timestamp
-        buf.write_i32_le(0).await?; // process_time
-        buf.write_i64_le(0).await?; // ticket_in_id
-        buf.write_i64_le(0).await?; // hub_id
-        buf.write_i64_le(0).await?; // ticket_eTag_id
-        buf.write_i64_le(0).await?; // ticket_out_id
-        buf.write_i32_le(status).await?;
-        buf.resize(cap, 0); // general1 8 + general2 16
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    } else if command_id == fe::CHECKOUT_COMMIT_BOO {
-        let cap = fe_protocol::response_checkout_commit_boo_resp_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_checkout_commit_boo_resp_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        buf.write_i32_le(0).await?; // version_id
-        buf.write_i64_le(request_id).await?;
-        buf.write_i64_le(session_id).await?;
-        buf.write_i64_le(0_i64).await?; // timestamp
-        buf.write_i64_le(0).await?; // ticket_in_id
-        buf.write_i64_le(0).await?; // hub_id
-        buf.write_i64_le(0).await?; // ticket_eTag_id
-        buf.write_i64_le(0).await?; // ticket_out_id
-        buf.write_i32_le(status).await?;
-        buf.resize(cap, 0); // general1 8 + general2 16
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    } else if command_id == fe::CHECKOUT_ROLLBACK_BOO {
-        let cap = fe_protocol::response_checkout_rollback_boo_resp_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_checkout_rollback_boo_resp_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        buf.write_i32_le(0).await?; // version_id
-        buf.write_i64_le(request_id).await?;
-        buf.write_i64_le(session_id).await?;
-        buf.write_i64_le(0_i64).await?; // timestamp
-        buf.write_i64_le(0).await?; // ticket_in_id
-        buf.write_i64_le(0).await?; // hub_id
-        buf.write_i64_le(0).await?; // ticket_eTag_id
-        buf.write_i64_le(0).await?; // ticket_out_id
-        buf.write_i32_le(status).await?;
-        buf.resize(cap, 0); // general1 8 + general2 16
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    } else {
-        let cap = fe_protocol::response_header_status_len() as usize;
-        let mut buf = Vec::with_capacity(cap);
-        buf.write_i32_le(fe_protocol::response_header_status_len())
-            .await?;
-        buf.write_i32_le(resp_cmd).await?;
-        fe_protocol::write_fe_request_id_session_id(&mut buf, request_id, session_id).await?;
-        buf.write_i32_le(status).await?;
-        let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buf);
-        Ok(wrap_encrypted_reply(encrypted))
-    }
 }
 
 /// Save TCOC_RESPONSE when sending response to FE.
@@ -787,6 +677,8 @@ pub async fn process_request(
                 &data,
                 conn_id,
                 encryption_key,
+                RATING_DB.clone(),
+                cache.clone(),
             )
             .await?;
             let response_send_ms = crate::utils::timestamp_ms();
@@ -826,6 +718,8 @@ pub async fn process_request(
                 &data,
                 conn_id,
                 encryption_key,
+                RATING_DB.clone(),
+                cache.clone(),
             )
             .await?;
             let response_send_ms = crate::utils::timestamp_ms();

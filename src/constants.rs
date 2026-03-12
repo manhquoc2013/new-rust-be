@@ -46,8 +46,10 @@ pub mod fe {
     pub const QUERY_VEHICLE_BOO_RESP: i32 = 0x65;
 
     /// LOOKUP_VEHICLE command - Client sends for lookup vehicle - Msg length: 110 bytes
+    #[allow(dead_code)]
     pub const LOOKUP_VEHICLE: i32 = 0x96;
     /// LOOKUP_VEHICLE_RESP - Server response to LOOKUP_VEHICLE - Msg length: 197 bytes
+    #[allow(dead_code)]
     pub const LOOKUP_VEHICLE_RESP: i32 = 0x97;
 
     /// CHECKOUT_RESERVE_BOO command - Client sends for checkout reserve boo - Msg length: total length of the message
@@ -68,11 +70,13 @@ pub mod fe {
     /// BOO 3A CHECKIN_COMMIT_BOO (same value as COMMIT). Spec 2.3.1.7.7.
     pub const CHECKIN_COMMIT_BOO: i32 = 0x68;
     /// BOO 3B CHECKIN_COMMIT_BOO_RESP (same value as COMMIT_RESP). Spec 2.3.1.7.8.
+    #[allow(dead_code)]
     pub const CHECKIN_COMMIT_BOO_RESP: i32 = 0x69;
 
     /// BOO 3A CHECKIN_ROLLBACK_BOO (same value as ROLLBACK). Spec 2.3.1.7.9.
     pub const CHECKIN_ROLLBACK_BOO: i32 = 0x6A;
     /// BOO 3B CHECKIN_ROLLBACK_BOO_RESP (same value as ROLLBACK_RESP). Spec 2.3.1.7.10.
+    #[allow(dead_code)]
     pub const CHECKIN_ROLLBACK_BOO_RESP: i32 = 0x6B;
 
     /// FE status: 0=Success, 14..107=subscriber/account/etag, 200..304=transaction/route/price, 901..903=system/BOO integration.
@@ -116,8 +120,6 @@ pub mod fe {
     pub const BOO_2_ERROR: i32 = 902;
     /// 903 ERROR_REASON_SYSTEM - Non-BOO system error (DB/service/internal failures).
     pub const ERROR_REASON_SYSTEM: i32 = 903;
-    /// 16 FE_MESSAGE_FORMAT_4BYTE_REJECTED - Only accept FE 8-byte messages (request_id/session_id i64); 4-byte messages rejected when FE_REQUIRE_8BYTE_IDS is set
-    pub const FE_MESSAGE_FORMAT_4BYTE_REJECTED: i32 = 16;
 }
 
 /// List of valid Front-End command IDs. Used in processor to validate incoming request.
