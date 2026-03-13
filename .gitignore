@@ -4,6 +4,17 @@
 # IDE
 .idea/
 
+# Java build outputs (Maven, Gradle, IntelliJ)
+target/
+build/
+out/
+*.class
+.gradle/
+.settings/
+.project
+.classpath
+.factorypath
+
 # JVM crash logs
 hs_err_pid*.log
 replay_pid*.log
