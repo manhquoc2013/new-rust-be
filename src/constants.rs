@@ -46,10 +46,8 @@ pub mod fe {
     pub const QUERY_VEHICLE_BOO_RESP: i32 = 0x65;
 
     /// LOOKUP_VEHICLE command - Client sends for lookup vehicle - Msg length: 110 bytes
-    #[allow(dead_code)]
     pub const LOOKUP_VEHICLE: i32 = 0x96;
     /// LOOKUP_VEHICLE_RESP - Server response to LOOKUP_VEHICLE - Msg length: 197 bytes
-    #[allow(dead_code)]
     pub const LOOKUP_VEHICLE_RESP: i32 = 0x97;
 
     /// CHECKOUT_RESERVE_BOO command - Client sends for checkout reserve boo - Msg length: total length of the message
@@ -130,7 +128,8 @@ pub const FE_VALID_COMMANDS: &[i32] = &[
     fe::COMMIT,          // 0x68
     fe::ROLLBACK,        // 0x6A
     fe::TERMINATE,       // 0x70
-    fe::QUERY_VEHICLE_BOO, // 0x64 (1A)
+    fe::QUERY_VEHICLE_BOO,   // 0x64 (1A)
+    fe::LOOKUP_VEHICLE,      // 0x96
     fe::CHECKOUT_RESERVE_BOO, // 0x98 (2AZ)
     fe::CHECKOUT_COMMIT_BOO, // 0x9A (3AZ)
     fe::CHECKOUT_ROLLBACK_BOO, // 0x9C (3AZ)
@@ -147,6 +146,7 @@ pub fn fe_response_command_id(command_id: i32) -> i32 {
         fe::COMMIT => fe::COMMIT_RESP,
         fe::ROLLBACK => fe::ROLLBACK_RESP,
         fe::QUERY_VEHICLE_BOO => fe::QUERY_VEHICLE_BOO_RESP,
+        fe::LOOKUP_VEHICLE => fe::LOOKUP_VEHICLE_RESP,
         fe::CHECKOUT_RESERVE_BOO => fe::CHECKOUT_RESERVE_BOO_RESP,
         fe::CHECKOUT_COMMIT_BOO => fe::CHECKOUT_COMMIT_BOO_RESP,
         fe::CHECKOUT_ROLLBACK_BOO => fe::CHECKOUT_ROLLBACK_BOO_RESP,

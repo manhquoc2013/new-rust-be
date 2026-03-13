@@ -23,6 +23,7 @@ use super::checkout_rollback::handle_checkout_rollback_boo;
 use super::commit::handle_commit;
 use super::connect::handle_connect;
 use super::handshake::handle_handshake;
+use super::lookup_vehicle::handle_lookup_vehicle;
 use super::query_vehicle_boo::handle_query_vehicle_boo;
 use super::rollback::handle_rollback;
 use super::terminate::handle_terminate;
@@ -657,6 +658,33 @@ pub async fn process_request(
             save_tcoc_response_if_applicable(
                 &ctx,
                 fe::QUERY_VEHICLE_BOO_RESP,
+                &response,
+                Some(status),
+                None,
+                None,
+                None,
+                response_send_ms,
+            );
+            response
+        }
+        fe::LOOKUP_VEHICLE => {
+            tracing::debug!(
+                conn_id = ctx.conn_id,
+                request_id = ctx.request_id,
+                "[Processor] LOOKUP_VEHICLE"
+            );
+            let (response, status) = handle_lookup_vehicle(
+                fe_request,
+                &data,
+                conn_id,
+                encryption_key,
+                RATING_DB.clone(),
+            )
+            .await?;
+            let response_send_ms = crate::utils::timestamp_ms();
+            save_tcoc_response_if_applicable(
+                &ctx,
+                fe::LOOKUP_VEHICLE_RESP,
                 &response,
                 Some(status),
                 None,

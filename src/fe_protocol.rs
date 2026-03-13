@@ -60,6 +60,8 @@ pub mod len {
     pub const ROLLBACK: usize = 90;
     /// QUERY_VEHICLE_BOO (1A) 2.3.1.7.13: 4+4+4+8+8+8+24+24+4+4+1+1+4+8+16 = 122
     pub const QUERY_VEHICLE_BOO: usize = 122;
+    /// LOOKUP_VEHICLE (0x96): 4+4+4+8+8+8+24+24+4+4+1+1+8+8 = 110
+    pub const LOOKUP_VEHICLE: usize = 110;
     /// CHECKOUT_RESERVE_BOO (2AZ) minimum: fixed header through rating_detail_line + general1 + general2 (no rating_detail items) = 203
     pub const CHECKOUT_RESERVE_BOO_MIN: usize = 203;
     /// CHECKOUT_COMMIT_BOO (3AZ) 2.3.1.7.19: fixed 188 bytes.
@@ -169,6 +171,12 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             plate: (56, 66),
         },
         fe::QUERY_VEHICLE_BOO => FeBodyOffsets {
+            toll: (84, 88),
+            etag: (60, 84),
+            lane: (88, 92),
+            plate: (0, 0),
+        },
+        fe::LOOKUP_VEHICLE => FeBodyOffsets {
             toll: (84, 88),
             etag: (60, 84),
             lane: (88, 92),
@@ -295,6 +303,11 @@ pub fn response_checkin_in_resp_len() -> i32 {
 /// QUERY_VEHICLE_BOO_RESP (1B) 2.3.1.7.14: 133 bytes.
 pub fn response_query_vehicle_boo_resp_len() -> i32 {
     133
+}
+
+/// LOOKUP_VEHICLE_RESP (0x97): 197 bytes.
+pub fn response_lookup_vehicle_resp_len() -> i32 {
+    197
 }
 
 /// CHECKOUT_RESERVE_BOO_RESP (2BZ) 2.3.1.7.18: 100 bytes.

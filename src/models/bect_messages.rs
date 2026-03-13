@@ -205,6 +205,128 @@ impl fmt::Debug for QUERY_VEHICLE_BOO_RESP {
     }
 }
 
+// ============== LOOKUP_VEHICLE (0x96, 110 bytes) ==============
+
+/// LOOKUP_VEHICLE – FE sends to Back-End to lookup vehicle by etag. Command ID: 150 (0x96). Size: 110 bytes.
+#[derive(Default)]
+pub struct LOOKUP_VEHICLE {
+    pub message_length: i32,   // 4 – 110
+    pub command_id: i32,       // 4 – 0x96
+    pub version_id: i32,       // 4
+    pub request_id: i64,       // 8
+    pub session_id: i64,       // 8
+    pub timestamp: i64,        // 8 – epoch ms
+    pub tid: String,           // 24 – TID
+    pub etag: String,          // 24 – EPC/ETAG
+    pub station: i32,          // 4
+    pub lane: i32,             // 4
+    pub station_type: String,  // 1 – C: closed, O: open
+    pub lane_type: String,     // 1 – I: in, O: out
+    pub general1: [u8; 8],     // 8
+    pub general2: [u8; 8],     // 8
+}
+
+impl fmt::Debug for LOOKUP_VEHICLE {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LOOKUP_VEHICLE")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("tid", &self.tid.trim_end_matches('\0'))
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("station", &self.station)
+            .field("lane", &self.lane)
+            .field("station_type", &self.station_type.trim_end_matches('\0'))
+            .field("lane_type", &self.lane_type.trim_end_matches('\0'))
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
+// ============== LOOKUP_VEHICLE_RESP (0x97, 197 bytes) ==============
+
+/// LOOKUP_VEHICLE_RESP – Back-End response to LOOKUP_VEHICLE. Command ID: 151 (0x97). Size: 197 bytes.
+pub struct LOOKUP_VEHICLE_RESP {
+    pub message_length: i32,
+    pub command_id: i32,
+    pub version_id: i32,
+    pub request_id: i64,
+    pub session_id: i64,
+    pub timestamp: i64,
+    pub process_time: i32,
+    pub etag: String,
+    pub vehicle_type: i32,
+    pub ticket_type: String,
+    pub register_vehicle_type: String,
+    pub seat: i32,
+    pub weight_goods: i32,
+    pub weight_all: i32,
+    pub plate: String,
+    pub status: i32,
+    pub min_balance_status: i32,
+    pub general1: [u8; 8],
+    pub general2: [u8; 16],
+    /// Extra bytes to reach 197 bytes total (133 + 64).
+    pub extra: [u8; 64],
+}
+
+impl Default for LOOKUP_VEHICLE_RESP {
+    fn default() -> Self {
+        Self {
+            message_length: 0,
+            command_id: 0,
+            version_id: 0,
+            request_id: 0,
+            session_id: 0,
+            timestamp: 0,
+            process_time: 0,
+            etag: String::new(),
+            vehicle_type: 0,
+            ticket_type: String::new(),
+            register_vehicle_type: String::new(),
+            seat: 0,
+            weight_goods: 0,
+            weight_all: 0,
+            plate: String::new(),
+            status: 0,
+            min_balance_status: 0,
+            general1: [0u8; 8],
+            general2: [0u8; 16],
+            extra: [0u8; 64],
+        }
+    }
+}
+
+impl fmt::Debug for LOOKUP_VEHICLE_RESP {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LOOKUP_VEHICLE_RESP")
+            .field("message_length", &self.message_length)
+            .field("command_id", &format_args!("0x{:02X}", self.command_id))
+            .field("version_id", &self.version_id)
+            .field("request_id", &self.request_id)
+            .field("session_id", &self.session_id)
+            .field("timestamp", &self.timestamp)
+            .field("process_time", &self.process_time)
+            .field("etag", &self.etag.trim_end_matches('\0'))
+            .field("vehicle_type", &self.vehicle_type)
+            .field("ticket_type", &self.ticket_type.trim_end_matches('\0'))
+            .field("register_vehicle_type", &self.register_vehicle_type.trim_end_matches('\0'))
+            .field("seat", &self.seat)
+            .field("weight_goods", &self.weight_goods)
+            .field("weight_all", &self.weight_all)
+            .field("plate", &self.plate.trim_end_matches('\0'))
+            .field("status", &self.status)
+            .field("min_balance_status", &self.min_balance_status)
+            .field("general1", &format_args!("{:?}", &self.general1))
+            .field("general2", &format_args!("{:?}", &self.general2))
+            .finish()
+    }
+}
+
 // ============== 3A CHECKIN_COMMIT_BOO (0x68, 152 bytes) ==============
 
 /// CHECKIN_COMMIT_BOO (3A) – Highway Back-End sends to Card-issuer Back-End to commit check-in.
