@@ -4,12 +4,21 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * TCP client: send encrypted FE frame (4-byte LE length + encrypted payload), receive same format and decrypt.
+ * When server sends plain error (8 bytes: length=8 + error_code) before closing, receive() throws IOException with message from {@link #plainErrorMessage(int)}.
  */
 public class FeClient implements AutoCloseable {
+
+    /** Plain error codes from server (no encryption key, IP denied, etc.). */
+    public static final int PLAIN_ERR_NO_ENCRYPTION_KEY = 301;
+    public static final int PLAIN_ERR_EMPTY_KEY = 302;
+    public static final int PLAIN_ERR_IP_DENIED = 307;
+    public static final int PLAIN_ERR_IP_BLOCKED = 308;
 
     private Socket socket;
     private InputStream in;
@@ -34,6 +43,24 @@ public class FeClient implements AutoCloseable {
     }
 
     /**
+     * Human-readable message for server plain error code (sent before encryption).
+     */
+    public static String plainErrorMessage(int code) {
+        switch (code) {
+            case PLAIN_ERR_NO_ENCRYPTION_KEY:
+                return "Server: Không tìm thấy encryption key cho IP (301)";
+            case PLAIN_ERR_EMPTY_KEY:
+                return "Server: Encryption key rỗng cho IP (302)";
+            case PLAIN_ERR_IP_DENIED:
+                return "Server: IP bị từ chối - denylist (307)";
+            case PLAIN_ERR_IP_BLOCKED:
+                return "Server: IP bị khóa - quá nhiều lần lỗi (308)";
+            default:
+                return "Server trả lỗi (code " + code + ") trước khi thiết lập mã hóa";
+        }
+    }
+
+    /**
      * Send plain payload: encrypt and wrap with 4-byte length, then write to socket.
      */
     public void send(byte[] plainPayload) throws Exception {
@@ -44,22 +71,42 @@ public class FeClient implements AutoCloseable {
     }
 
     /**
-     * Read one FE frame: 4 bytes LE length, then (length-4) bytes payload; decrypt and return.
+     * Read one FE frame: 4 bytes LE length, then (length-4) bytes payload.
+     * If length == 8: server sent plain error (no encryption); throws IOException with {@link #plainErrorMessage(int)}.
+     * Otherwise decrypt and return.
      */
     public byte[] receive() throws IOException {
         byte[] lenBuf = new byte[4];
         int n = readFully(in, lenBuf);
-        if (n != 4) throw new IOException("Short read length: " + n);
+        if (n == 0) {
+            throw new IOException("Server đóng kết nối (không có dữ liệu). Kiểm tra IP có trong cấu hình server / encryption key / IP bị chặn.");
+        }
+        if (n != 4) {
+            throw new IOException("Đọc length không đủ: " + n + " byte. Server có thể đã đóng kết nối.");
+        }
         int totalLen = (lenBuf[0] & 0xFF) | ((lenBuf[1] & 0xFF) << 8) | ((lenBuf[2] & 0xFF) << 16) | ((lenBuf[3] & 0xFF) << 24);
-        if (totalLen < 4 || totalLen > 1024 * 1024) throw new IOException("Invalid frame length: " + totalLen);
+        if (totalLen == 8) {
+            byte[] payload = new byte[4];
+            n = readFully(in, payload);
+            if (n != 4) {
+                throw new IOException("Server gửi bản tin lỗi nhưng đóng sớm (đọc " + n + "/4 byte).");
+            }
+            int code = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN).getInt();
+            throw new IOException(plainErrorMessage(code));
+        }
+        if (totalLen < 4 || totalLen > 1024 * 1024) {
+            throw new IOException("Độ dài frame không hợp lệ: " + totalLen);
+        }
         int payloadLen = totalLen - 4;
         byte[] payload = new byte[payloadLen];
         n = readFully(in, payload);
-        if (n != payloadLen) throw new IOException("Short read payload: got " + n + " expected " + payloadLen);
+        if (n != payloadLen) {
+            throw new IOException("Đọc payload không đủ: " + n + "/" + payloadLen + ". Server có thể đã đóng kết nối.");
+        }
         try {
             return AesCrypto.decrypt(payload, encryptionKey);
         } catch (Exception e) {
-            throw new IOException("Decrypt failed: " + e.getMessage(), e);
+            throw new IOException("Giải mã thất bại: " + e.getMessage(), e);
         }
     }
 

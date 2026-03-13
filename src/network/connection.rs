@@ -22,6 +22,16 @@ use super::client_ip::get_real_client_ip;
 use super::terminate::{self as term};
 use crate::constants::network::{self as net_consts};
 
+/// Plain error frame sent before any encryption: 4 bytes length (LE) = 8, 4 bytes error_code (i32 LE).
+/// Client can read and show error without decrypting. Call before closing socket when no encryption key is available.
+pub async fn send_plain_error_then_close(socket: &mut TcpStream, error_code: i32) {
+    let mut buf = [0u8; 8];
+    buf[0..4].copy_from_slice(&8u32.to_le_bytes());
+    buf[4..8].copy_from_slice(&error_code.to_le_bytes());
+    let _ = socket.write_all(&buf).await;
+    let _ = socket.flush().await;
+}
+
 /// Xử lý một kết nối TCP (handshake, đọc ghi, route tới logic).
 /// Khi phát hiện client đóng kết nối (EOF, ConnectionReset, lỗi ghi), set `peer_disconnected = true`
 /// để timeout handshake có thể bỏ qua gửi TERMINATE_RESP nếu kết nối đã không còn.
@@ -389,7 +399,7 @@ async fn load_server_config(
 async fn fail_no_encryption_key(
     conn_id: ConnectionId,
     ip_str: &str,
-    socket: TcpStream,
+    mut socket: TcpStream,
     active_conns: ConnectionMap,
 ) -> Result<(), Box<dyn Error>> {
     tracing::error!(conn_id, error_code = term::status::ERROR_NO_ENCRYPTION_KEY, ip = %ip_str, "[Network] no encryption_key for IP, closing connection");
@@ -397,6 +407,7 @@ async fn fail_no_encryption_key(
         let mut conns = active_conns.lock().unwrap();
         conns.remove(&conn_id);
     }
+    send_plain_error_then_close(&mut socket, term::status::ERROR_NO_ENCRYPTION_KEY).await;
     drop(socket);
     Err(Box::new(std::io::Error::new(
         std::io::ErrorKind::PermissionDenied,
@@ -411,7 +422,7 @@ async fn fail_no_encryption_key(
 async fn fail_empty_key(
     conn_id: ConnectionId,
     ip_str: &str,
-    socket: TcpStream,
+    mut socket: TcpStream,
     active_conns: ConnectionMap,
 ) -> Result<(), Box<dyn Error>> {
     tracing::error!(
@@ -423,6 +434,7 @@ async fn fail_empty_key(
         let mut conns = active_conns.lock().unwrap();
         conns.remove(&conn_id);
     }
+    send_plain_error_then_close(&mut socket, term::status::ERROR_EMPTY_KEY).await;
     drop(socket);
     Err(Box::new(std::io::Error::new(
         std::io::ErrorKind::InvalidData,

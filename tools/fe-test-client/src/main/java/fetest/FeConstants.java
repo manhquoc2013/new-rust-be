@@ -38,6 +38,8 @@ public final class FeConstants {
     public static final int LEN_ROLLBACK = 90;
     public static final int LEN_QUERY_VEHICLE_BOO = 122;
     public static final int LEN_LOOKUP_VEHICLE = 110;
+    /** Minimum CHECKOUT_RESERVE_BOO (no rating_detail items): 203 bytes */
+    public static final int LEN_CHECKOUT_RESERVE_BOO_MIN = 203;
     public static final int LEN_CHECKOUT_COMMIT_BOO = 188;
     public static final int LEN_CHECKOUT_ROLLBACK_BOO = 178;
 

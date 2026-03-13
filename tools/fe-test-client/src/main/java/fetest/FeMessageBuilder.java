@@ -160,5 +160,108 @@ public final class FeMessageBuilder {
         return b.array();
     }
 
+    /** CHECKOUT_RESERVE_BOO: minimum 203 bytes (rating_detail_line=0, no rating_detail items). */
+    public static byte[] buildCheckoutReserveBoo(long requestId, long sessionId, long timestamp,
+                                                  String tid, String etag, long ticketInId, long hubId, long ticketETagId, long ticketOutId,
+                                                  long checkinDatetime, long checkinCommitDatetime,
+                                                  int stationIn, int laneIn, int stationOut, int laneOut,
+                                                  String plate, String ticketType, int priceTicketType, int transAmount, long transDatetime,
+                                                  int ratingDetailLine, byte[] general1, byte[] general2) {
+        ByteBuffer b = ByteBuffer.allocate(FeConstants.LEN_CHECKOUT_RESERVE_BOO_MIN).order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(FeConstants.LEN_CHECKOUT_RESERVE_BOO_MIN);
+        b.putInt(FeConstants.CHECKOUT_RESERVE_BOO);
+        b.putInt(FeConstants.VERSION_ID_DEFAULT);
+        b.putLong(requestId);
+        b.putLong(sessionId);
+        b.putLong(timestamp);
+        b.put(pad(tid != null ? tid : "", 24));
+        b.put(pad(etag != null ? etag : "", 24));
+        b.putLong(ticketInId);
+        b.putLong(hubId != 0 ? hubId : 0);
+        b.putLong(ticketETagId);
+        b.putLong(ticketOutId);
+        b.putLong(checkinDatetime);
+        b.putLong(checkinCommitDatetime);
+        b.putInt(stationIn);
+        b.putInt(laneIn);
+        b.putInt(stationOut);
+        b.putInt(laneOut);
+        b.put(pad(plate != null ? plate : "", 10));
+        b.put(pad(ticketType != null && !ticketType.isEmpty() ? ticketType.substring(0, 1) : "L", 1));
+        b.putInt(priceTicketType);
+        b.putInt(transAmount);
+        b.putLong(transDatetime);
+        b.putInt(ratingDetailLine >= 0 ? ratingDetailLine : 0);
+        if (general1 != null && general1.length >= 8) b.put(Arrays.copyOf(general1, 8));
+        else b.put(new byte[8]);
+        if (general2 != null && general2.length >= 16) b.put(Arrays.copyOf(general2, 16));
+        else b.put(new byte[16]);
+        return b.array();
+    }
+
+    /** CHECKOUT_COMMIT_BOO: 188 bytes. Plate 20 bytes. */
+    public static byte[] buildCheckoutCommitBoo(long requestId, long sessionId, long timestamp,
+                                                String tid, String etag, long ticketInId, long hubId, long ticketOutId, long ticketETagId,
+                                                int stationIn, int laneIn, int stationOut, int laneOut,
+                                                String plate, int transAmount, long transDatetime, byte[] general1, byte[] general2) {
+        ByteBuffer b = ByteBuffer.allocate(FeConstants.LEN_CHECKOUT_COMMIT_BOO).order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(FeConstants.LEN_CHECKOUT_COMMIT_BOO);
+        b.putInt(FeConstants.CHECKOUT_COMMIT_BOO);
+        b.putInt(FeConstants.VERSION_ID_DEFAULT);
+        b.putLong(requestId);
+        b.putLong(sessionId);
+        b.putLong(timestamp);
+        b.put(pad(tid != null ? tid : "", 24));
+        b.put(pad(etag != null ? etag : "", 24));
+        b.putLong(ticketInId);
+        b.putLong(hubId);
+        b.putLong(ticketOutId);
+        b.putLong(ticketETagId);
+        b.putInt(stationIn);
+        b.putInt(laneIn);
+        b.putInt(stationOut);
+        b.putInt(laneOut);
+        b.put(pad(plate != null ? plate : "", 20));
+        b.putInt(transAmount);
+        b.putLong(transDatetime);
+        if (general1 != null && general1.length >= 8) b.put(Arrays.copyOf(general1, 8));
+        else b.put(new byte[8]);
+        if (general2 != null && general2.length >= 16) b.put(Arrays.copyOf(general2, 16));
+        else b.put(new byte[16]);
+        return b.array();
+    }
+
+    /** CHECKOUT_ROLLBACK_BOO: 178 bytes. Plate 10 bytes. */
+    public static byte[] buildCheckoutRollbackBoo(long requestId, long sessionId, long timestamp,
+                                                   String tid, String etag, long ticketInId, long hubId, long ticketOutId, long ticketETagId,
+                                                   int stationIn, int laneIn, int stationOut, int laneOut,
+                                                   String plate, int transAmount, long transDatetime, byte[] general1, byte[] general2) {
+        ByteBuffer b = ByteBuffer.allocate(FeConstants.LEN_CHECKOUT_ROLLBACK_BOO).order(ByteOrder.LITTLE_ENDIAN);
+        b.putInt(FeConstants.LEN_CHECKOUT_ROLLBACK_BOO);
+        b.putInt(FeConstants.CHECKOUT_ROLLBACK_BOO);
+        b.putInt(FeConstants.VERSION_ID_DEFAULT);
+        b.putLong(requestId);
+        b.putLong(sessionId);
+        b.putLong(timestamp);
+        b.put(pad(tid != null ? tid : "", 24));
+        b.put(pad(etag != null ? etag : "", 24));
+        b.putLong(ticketInId);
+        b.putLong(hubId);
+        b.putLong(ticketOutId);
+        b.putLong(ticketETagId);
+        b.putInt(stationIn);
+        b.putInt(laneIn);
+        b.putInt(stationOut);
+        b.putInt(laneOut);
+        b.put(pad(plate != null ? plate : "", 10));
+        b.putInt(transAmount);
+        b.putLong(transDatetime);
+        if (general1 != null && general1.length >= 8) b.put(Arrays.copyOf(general1, 8));
+        else b.put(new byte[8]);
+        if (general2 != null && general2.length >= 16) b.put(Arrays.copyOf(general2, 16));
+        else b.put(new byte[16]);
+        return b.array();
+    }
+
     private FeMessageBuilder() {}
 }

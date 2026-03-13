@@ -7,6 +7,10 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * FE Test Client UI: connection, etags, commands (no CONNECT/SHAKE/TERMINATE), dynamic form per command,
@@ -19,10 +23,18 @@ public class FeTestClientApp extends JFrame {
     private static final int CMD_ROLLBACK = 2;
     private static final int CMD_LOOKUP_VEHICLE = 3;
     private static final int CMD_QUERY_VEHICLE_BOO = 4;
+    private static final int CMD_CHECKOUT_RESERVE = 5;
+    private static final int CMD_CHECKOUT_COMMIT = 6;
+    private static final int CMD_CHECKOUT_ROLLBACK = 7;
 
+    private final JComboBox<ConnectionProfile> connectionCombo = new JComboBox<>();
+    private final DefaultComboBoxModel<ConnectionProfile> connectionModel = new DefaultComboBoxModel<>();
     private final JTextField hostField = new JTextField("127.0.0.1", 12);
     private final JTextField portField = new JTextField("7000", 6);
+    private final JTextField userField = new JTextField("", 10);
+    private final JPasswordField passField = new JPasswordField(10);
     private final JTextField encryptionKeyField = new JTextField(16);
+    private final JTextField timeoutField = new JTextField("60", 4);
     private final JTextField stationField = new JTextField("0", 6);
     private final JTextField laneField = new JTextField("0", 4);
 
@@ -30,7 +42,8 @@ public class FeTestClientApp extends JFrame {
     private final JList<String> etagList = new JList<>(etagListModel);
 
     private final JComboBox<String> commandCombo = new JComboBox<>(new String[]{
-            "CHECKIN (0x66)", "COMMIT (0x68)", "ROLLBACK (0x6A)", "LOOKUP_VEHICLE (0x96)", "QUERY_VEHICLE_BOO (0x64)"
+            "CHECKIN (0x66)", "COMMIT (0x68)", "ROLLBACK (0x6A)", "LOOKUP_VEHICLE (0x96)", "QUERY_VEHICLE_BOO (0x64)",
+            "CHECKOUT_RESERVE (0x98)", "CHECKOUT_COMMIT (0x9A)", "CHECKOUT_ROLLBACK (0x9C)"
     });
 
     private final JTextField sessionIdField = new JTextField("0", 14);
@@ -41,6 +54,21 @@ public class FeTestClientApp extends JFrame {
     private final JTextField hashField = new JTextField("", 18);
     private final JTextField statusField = new JTextField("0", 4);
     private final JTextField minBalanceField = new JTextField("0", 6);
+    private final JTextField stationInField = new JTextField("0", 6);
+    private final JTextField laneInField = new JTextField("0", 4);
+    private final JTextField stationOutField = new JTextField("0", 6);
+    private final JTextField laneOutField = new JTextField("0", 4);
+    private final JTextField ticketInIdField = new JTextField("0", 14);
+    private final JTextField ticketOutIdField = new JTextField("0", 14);
+    private final JTextField ticketETagIdField = new JTextField("0", 14);
+    private final JTextField hubIdField = new JTextField("0", 14);
+    private final JTextField checkinDatetimeField = new JTextField("0", 16);
+    private final JTextField checkinCommitDatetimeField = new JTextField("0", 16);
+    private final JTextField transAmountField = new JTextField("0", 8);
+    private final JTextField transDatetimeField = new JTextField("0", 16);
+    private final JTextField ticketTypeField = new JTextField("L", 2);
+    private final JTextField priceTicketTypeField = new JTextField("0", 4);
+    private final JTextField ratingDetailLineField = new JTextField("0", 2);
 
     private final JPanel dynamicFormPanel = new JPanel();
     private final JButton refillButton = new JButton("Refill từ response trước");
@@ -53,6 +81,17 @@ public class FeTestClientApp extends JFrame {
 
     private FeClient client;
     private FeResponseParser.ParsedResponse lastResponse;
+    private volatile long lastSessionId;
+    private ScheduledExecutorService handshakeExecutor;
+    private ScheduledFuture<?> handshakeTask;
+    private String savedHost;
+    private int savedPort;
+    private String savedKey;
+    private String savedUser;
+    private String savedPass;
+    private int savedTimeout;
+    private volatile boolean reconnectInProgress;
+    private volatile boolean userRequestedDisconnect;
 
     public FeTestClientApp() {
         setTitle("FE Test Client - TCOC Protocol");
@@ -60,10 +99,21 @@ public class FeTestClientApp extends JFrame {
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
-                disconnect();
+                cancelHandshake();
+                if (handshakeExecutor != null) handshakeExecutor.shutdown();
+                disconnect(false);
                 dispose();
             }
         });
+        handshakeExecutor = Executors.newSingleThreadScheduledExecutor();
+        loadConnections();
+        connectionCombo.setModel(connectionModel);
+        connectionCombo.setRenderer((list, value, index, isSelected, cellHasFocus) -> {
+            JLabel l = new JLabel(value != null ? value.toString() : "");
+            if (isSelected) { l.setBackground(list.getSelectionBackground()); l.setForeground(list.getSelectionForeground()); l.setOpaque(true); }
+            return l;
+        });
+        connectionCombo.addActionListener(e -> onConnectionSelected());
 
         JPanel main = new JPanel(new BorderLayout(8, 8));
         main.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -76,33 +126,124 @@ public class FeTestClientApp extends JFrame {
 
         setContentPane(main);
         pack();
-        setMinimumSize(new Dimension(720, 580));
+        setMinimumSize(new Dimension(780, 620));
         setLocationRelativeTo(null);
     }
 
     private JPanel buildConnectionPanel() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        p.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Kết nối", TitledBorder.LEFT, TitledBorder.TOP));
+        JPanel p = new JPanel(new BorderLayout(4, 4));
+        p.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Quản lý kết nối (nhiều profile, lưu lại)", TitledBorder.LEFT, TitledBorder.TOP));
 
-        p.add(new JLabel("IP:"));
-        p.add(hostField);
-        p.add(new JLabel("Port:"));
-        p.add(portField);
-        p.add(new JLabel("Encryption key (16):"));
-        encryptionKeyField.setToolTipText("16 ký tự cho AES-128");
-        p.add(encryptionKeyField);
-        p.add(new JLabel("Station:"));
-        p.add(stationField);
-        p.add(new JLabel("Lane:"));
-        p.add(laneField);
-        p.add(connectButton);
-        p.add(disconnectButton);
-        disconnectButton.setEnabled(false);
-
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        row1.add(new JLabel("Profile:"));
+        row1.add(connectionCombo);
+        JButton loadConnBtn = new JButton("Tải");
+        JButton addConnBtn = new JButton("Thêm");
+        JButton editConnBtn = new JButton("Sửa");
+        JButton delConnBtn = new JButton("Xóa");
+        loadConnBtn.addActionListener(e -> onConnectionSelected());
+        addConnBtn.addActionListener(e -> addConnection());
+        editConnBtn.addActionListener(e -> editConnection());
+        delConnBtn.addActionListener(e -> deleteConnection());
+        row1.add(loadConnBtn);
+        row1.add(addConnBtn);
+        row1.add(editConnBtn);
+        row1.add(delConnBtn);
+        row1.add(new JSeparator(SwingConstants.VERTICAL));
         connectButton.addActionListener(e -> doConnect());
-        disconnectButton.addActionListener(e -> disconnect());
+        disconnectButton.addActionListener(e -> disconnect(true));
+        disconnectButton.setEnabled(false);
+        row1.add(connectButton);
+        row1.add(disconnectButton);
+        p.add(row1, BorderLayout.NORTH);
+
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        row2.add(new JLabel("IP:"));
+        row2.add(hostField);
+        row2.add(new JLabel("Port:"));
+        row2.add(portField);
+        row2.add(new JLabel("User:"));
+        row2.add(userField);
+        row2.add(new JLabel("Pass:"));
+        row2.add(passField);
+        row2.add(new JLabel("Encryption key (16):"));
+        encryptionKeyField.setToolTipText("16 ký tự cho AES-128");
+        row2.add(encryptionKeyField);
+        row2.add(new JLabel("Timeout (s):"));
+        timeoutField.setToolTipText("Timeout cho bản tin CONNECT");
+        row2.add(timeoutField);
+        row2.add(new JLabel("Station:"));
+        row2.add(stationField);
+        row2.add(new JLabel("Lane:"));
+        row2.add(laneField);
+        p.add(row2, BorderLayout.CENTER);
 
         return p;
+    }
+
+    private void loadConnections() {
+        connectionModel.removeAllElements();
+        for (ConnectionProfile c : ConnectionManager.load()) {
+            connectionModel.addElement(c);
+        }
+    }
+
+    private void onConnectionSelected() {
+        ConnectionProfile sel = (ConnectionProfile) connectionCombo.getSelectedItem();
+        if (sel == null) return;
+        hostField.setText(sel.getHost());
+        portField.setText(String.valueOf(sel.getPort()));
+        userField.setText(sel.getUser());
+        passField.setText(sel.getPassword());
+        encryptionKeyField.setText(sel.getEncryptionKey());
+        stationField.setText(sel.getStation());
+        laneField.setText(sel.getLane());
+    }
+
+    private void addConnection() {
+        ConnectionProfile c = new ConnectionProfile();
+        c.setHost(hostField.getText().trim());
+        try { c.setPort(Integer.parseInt(portField.getText().trim())); } catch (NumberFormatException ignored) { }
+        c.setUser(userField.getText().trim());
+        c.setPassword(new String(passField.getPassword()));
+        c.setEncryptionKey(encryptionKeyField.getText());
+        c.setStation(stationField.getText().trim());
+        c.setLane(laneField.getText().trim());
+        String name = JOptionPane.showInputDialog(this, "Tên profile:", "Kết nối " + c.getHost() + ":" + c.getPort());
+        if (name != null) {
+            c.setName(name.trim());
+            connectionModel.addElement(c);
+            ConnectionManager.save(connectionList());
+            connectionCombo.setSelectedItem(c);
+        }
+    }
+
+    private void editConnection() {
+        ConnectionProfile sel = (ConnectionProfile) connectionCombo.getSelectedItem();
+        if (sel == null) return;
+        String name = JOptionPane.showInputDialog(this, "Tên profile:", sel.getName());
+        if (name != null) sel.setName(name.trim());
+        sel.setHost(hostField.getText().trim());
+        try { sel.setPort(Integer.parseInt(portField.getText().trim())); } catch (NumberFormatException ignored) { }
+        sel.setUser(userField.getText().trim());
+        sel.setPassword(new String(passField.getPassword()));
+        sel.setEncryptionKey(encryptionKeyField.getText());
+        sel.setStation(stationField.getText().trim());
+        sel.setLane(laneField.getText().trim());
+        ConnectionManager.save(connectionList());
+    }
+
+    private void deleteConnection() {
+        ConnectionProfile sel = (ConnectionProfile) connectionCombo.getSelectedItem();
+        if (sel == null) return;
+        connectionModel.removeElement(sel);
+        ConnectionManager.save(connectionList());
+    }
+
+    private List<ConnectionProfile> connectionList() {
+        List<ConnectionProfile> list = new ArrayList<>();
+        for (int i = 0; i < connectionModel.getSize(); i++) list.add(connectionModel.getElementAt(i));
+        return list;
     }
 
     private JPanel buildCenterPanel() {
@@ -203,6 +344,53 @@ public class FeTestClientApp extends JFrame {
             addRow(dynamicFormPanel, c, row++, "Lane:", laneField);
             addRow(dynamicFormPanel, c, row++, "TID:", tidField);
             addRow(dynamicFormPanel, c, row++, "MinBalance:", minBalanceField);
+        } else if (cmd == CMD_CHECKOUT_RESERVE) {
+            addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
+            addRow(dynamicFormPanel, c, row++, "TID:", tidField);
+            addRow(dynamicFormPanel, c, row++, "Ticket In ID:", ticketInIdField);
+            addRow(dynamicFormPanel, c, row++, "Hub ID:", hubIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket eTag ID:", ticketETagIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket Out ID:", ticketOutIdField);
+            addRow(dynamicFormPanel, c, row++, "CheckIn datetime:", checkinDatetimeField);
+            addRow(dynamicFormPanel, c, row++, "CheckIn commit datetime:", checkinCommitDatetimeField);
+            addRow(dynamicFormPanel, c, row++, "Station In:", stationInField);
+            addRow(dynamicFormPanel, c, row++, "Lane In:", laneInField);
+            addRow(dynamicFormPanel, c, row++, "Station Out:", stationOutField);
+            addRow(dynamicFormPanel, c, row++, "Lane Out:", laneOutField);
+            addRow(dynamicFormPanel, c, row++, "Plate:", plateField);
+            addRow(dynamicFormPanel, c, row++, "Ticket type:", ticketTypeField);
+            addRow(dynamicFormPanel, c, row++, "Price ticket type:", priceTicketTypeField);
+            addRow(dynamicFormPanel, c, row++, "Trans amount:", transAmountField);
+            addRow(dynamicFormPanel, c, row++, "Trans datetime:", transDatetimeField);
+            addRow(dynamicFormPanel, c, row++, "Rating detail line:", ratingDetailLineField);
+        } else if (cmd == CMD_CHECKOUT_COMMIT) {
+            addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
+            addRow(dynamicFormPanel, c, row++, "TID:", tidField);
+            addRow(dynamicFormPanel, c, row++, "Ticket In ID:", ticketInIdField);
+            addRow(dynamicFormPanel, c, row++, "Hub ID:", hubIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket Out ID:", ticketOutIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket eTag ID:", ticketETagIdField);
+            addRow(dynamicFormPanel, c, row++, "Station In:", stationInField);
+            addRow(dynamicFormPanel, c, row++, "Lane In:", laneInField);
+            addRow(dynamicFormPanel, c, row++, "Station Out:", stationOutField);
+            addRow(dynamicFormPanel, c, row++, "Lane Out:", laneOutField);
+            addRow(dynamicFormPanel, c, row++, "Plate (20):", plateField);
+            addRow(dynamicFormPanel, c, row++, "Trans amount:", transAmountField);
+            addRow(dynamicFormPanel, c, row++, "Trans datetime:", transDatetimeField);
+        } else if (cmd == CMD_CHECKOUT_ROLLBACK) {
+            addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
+            addRow(dynamicFormPanel, c, row++, "TID:", tidField);
+            addRow(dynamicFormPanel, c, row++, "Ticket In ID:", ticketInIdField);
+            addRow(dynamicFormPanel, c, row++, "Hub ID:", hubIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket Out ID:", ticketOutIdField);
+            addRow(dynamicFormPanel, c, row++, "Ticket eTag ID:", ticketETagIdField);
+            addRow(dynamicFormPanel, c, row++, "Station In:", stationInField);
+            addRow(dynamicFormPanel, c, row++, "Lane In:", laneInField);
+            addRow(dynamicFormPanel, c, row++, "Station Out:", stationOutField);
+            addRow(dynamicFormPanel, c, row++, "Lane Out:", laneOutField);
+            addRow(dynamicFormPanel, c, row++, "Plate:", plateField);
+            addRow(dynamicFormPanel, c, row++, "Trans amount:", transAmountField);
+            addRow(dynamicFormPanel, c, row++, "Trans datetime:", transDatetimeField);
         }
         dynamicFormPanel.revalidate();
         dynamicFormPanel.repaint();
@@ -229,6 +417,9 @@ public class FeTestClientApp extends JFrame {
     private void doConnect() {
         String host = hostField.getText().trim();
         String portStr = portField.getText().trim();
+        String user = userField.getText().trim();
+        String pass = new String(passField.getPassword());
+        String key = encryptionKeyField.getText();
         int port;
         try {
             port = Integer.parseInt(portStr);
@@ -236,31 +427,207 @@ public class FeTestClientApp extends JFrame {
             appendStatus("Lỗi: Port không hợp lệ.");
             return;
         }
-        String key = encryptionKeyField.getText();
+        int timeout = 60;
+        try {
+            timeout = Integer.parseInt(timeoutField.getText().trim());
+            if (timeout <= 0) timeout = 60;
+        } catch (NumberFormatException ignored) { }
         if (key.length() != 16) {
             appendStatus("Cảnh báo: Encryption key nên đủ 16 ký tự (AES-128).");
         }
-        try {
-            disconnect();
-            client = new FeClient(host, port, key);
-            appendStatus("Đã kết nối " + host + ":" + port);
-            connectButton.setEnabled(false);
-            disconnectButton.setEnabled(true);
-        } catch (Exception e) {
-            appendStatus("Kết nối thất bại: " + e.getMessage());
-        }
+        final String hostFinal = host;
+        final int portFinal = port;
+        final String userFinal = user;
+        final String passFinal = pass;
+        final String keyFinal = key;
+        final int timeoutFinal = timeout;
+        userRequestedDisconnect = false;
+        connectButton.setEnabled(false);
+        disconnectButton.setEnabled(false);
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            String err;
+            FeResponseParser.ParsedResponse connResp;
+
+            @Override
+            protected Void doInBackground() throws Exception {
+                closeClientQuietly();
+                try {
+                    FeClient c = new FeClient(hostFinal, portFinal, keyFinal);
+                    client = c;
+                    byte[] connectMsg = FeMessageBuilder.buildConnect(c.nextRequestId(), userFinal, passFinal, timeoutFinal);
+                    c.send(connectMsg);
+                    byte[] respDecrypted = c.receive();
+                    connResp = FeResponseParser.parse(respDecrypted);
+                    lastResponse = connResp;
+                    return null;
+                } catch (Exception e) {
+                    err = e.getMessage();
+                    closeClientQuietly();
+                    return null;
+                }
+            }
+
+            @Override
+            protected void done() {
+                if (err != null) {
+                    appendStatus("Kết nối / CONNECT thất bại: " + err);
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                    return;
+                }
+                if (connResp != null && connResp.commandId == FeConstants.CONNECT_RESP) {
+                    if (connResp.status == 0) {
+                        lastSessionId = connResp.sessionId;
+                        savedHost = hostFinal;
+                        savedPort = portFinal;
+                        savedKey = keyFinal;
+                        savedUser = userFinal;
+                        savedPass = passFinal;
+                        savedTimeout = timeoutFinal;
+                        sessionIdField.setText(String.valueOf(connResp.sessionId));
+                        appendStatus("Đã kết nối " + hostFinal + ":" + portFinal + " và gửi CONNECT OK, session_id=" + connResp.sessionId);
+                        connectButton.setEnabled(false);
+                        disconnectButton.setEnabled(true);
+                        startHandshakeTimer();
+                    } else {
+                        disconnect(false);
+                        appendStatus("CONNECT trả về lỗi status=" + connResp.status + " (auth/cấu hình). Đã ngắt kết nối.");
+                        connectButton.setEnabled(true);
+                        disconnectButton.setEnabled(false);
+                    }
+                } else {
+                    disconnect(false);
+                    appendStatus("CONNECT: response không hợp lệ (cmd=" + (connResp != null ? connResp.commandId : -1) + ")");
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                }
+            }
+        };
+        worker.execute();
     }
 
-    private void disconnect() {
+    /** Chỉ đóng socket và clear client, không đổi nút / không ghi trạng thái (dùng trong worker). */
+    private void closeClientQuietly() {
         if (client != null) {
             try {
                 client.close();
             } catch (Exception ignored) { }
             client = null;
         }
-        appendStatus("Đã ngắt kết nối.");
+    }
+
+    /**
+     * Ngắt kết nối và cập nhật UI.
+     * @param notifyUser true = ghi "Đã ngắt kết nối." (khi user bấm Ngắt); false = chỉ đóng, không ghi (khi lỗi CONNECT/reconnect).
+     */
+    private void disconnect(boolean notifyUser) {
+        userRequestedDisconnect = true;
+        cancelHandshake();
+        if (client != null) {
+            try {
+                client.close();
+            } catch (Exception ignored) { }
+            client = null;
+        }
+        if (notifyUser) {
+            appendStatus("Đã ngắt kết nối.");
+        }
         connectButton.setEnabled(true);
         disconnectButton.setEnabled(false);
+    }
+
+    private void cancelHandshake() {
+        if (handshakeTask != null) {
+            handshakeTask.cancel(false);
+            handshakeTask = null;
+        }
+    }
+
+    private void startHandshakeTimer() {
+        cancelHandshake();
+        handshakeTask = handshakeExecutor.scheduleAtFixedRate(() -> {
+            FeClient c = client;
+            if (c == null || !c.isConnected()) return;
+            long sid = lastSessionId;
+            try {
+                byte[] msg = FeMessageBuilder.buildHandshake(c.nextRequestId(), sid);
+                c.send(msg);
+                c.receive();
+            } catch (Exception e) {
+                connectionLost();
+            }
+        }, 5, 5, TimeUnit.SECONDS);
+    }
+
+    private void connectionLost() {
+        cancelHandshake();
+        if (client != null) {
+            try { client.close(); } catch (Exception ignored) { }
+            client = null;
+        }
+        SwingUtilities.invokeLater(() -> appendStatus("Mất kết nối, đang reconnect..."));
+        if (!userRequestedDisconnect && !reconnectInProgress && savedHost != null) startReconnect();
+    }
+
+    private void startReconnect() {
+        if (reconnectInProgress) return;
+        reconnectInProgress = true;
+        final String host = savedHost;
+        final int port = savedPort;
+        final String key = savedKey;
+        final String user = savedUser;
+        final String pass = savedPass;
+        final int timeout = savedTimeout;
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
+            String err;
+            FeResponseParser.ParsedResponse connResp;
+
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    FeClient c = new FeClient(host, port, key);
+                    client = c;
+                    byte[] connectMsg = FeMessageBuilder.buildConnect(c.nextRequestId(), user, pass, timeout);
+                    c.send(connectMsg);
+                    byte[] respDecrypted = c.receive();
+                    connResp = FeResponseParser.parse(respDecrypted);
+                    lastResponse = connResp;
+                    return null;
+                } catch (Exception e) {
+                    err = e.getMessage();
+                    if (client != null) {
+                        try { client.close(); } catch (Exception ignored) { }
+                        client = null;
+                    }
+                    return null;
+                }
+            }
+
+            @Override
+            protected void done() {
+                reconnectInProgress = false;
+                if (err != null) {
+                    appendStatus("Reconnect thất bại: " + err);
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                    return;
+                }
+                if (connResp != null && connResp.commandId == FeConstants.CONNECT_RESP && connResp.status == 0) {
+                    userRequestedDisconnect = false;
+                    lastSessionId = connResp.sessionId;
+                    sessionIdField.setText(String.valueOf(connResp.sessionId));
+                    appendStatus("Đã reconnect, session_id=" + connResp.sessionId);
+                    connectButton.setEnabled(false);
+                    disconnectButton.setEnabled(true);
+                    startHandshakeTimer();
+                } else {
+                    appendStatus("Reconnect: response không hợp lệ hoặc status=" + (connResp != null ? connResp.status : -1));
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                }
+            }
+        };
+        worker.execute();
     }
 
     private void refillFromLastResponse() {
@@ -270,9 +637,21 @@ public class FeTestClientApp extends JFrame {
         }
         sessionIdField.setText(String.valueOf(lastResponse.sessionId));
         ticketIdField.setText(String.valueOf(lastResponse.ticketId));
+        ticketInIdField.setText(String.valueOf(lastResponse.ticketInId));
+        ticketOutIdField.setText(String.valueOf(lastResponse.ticketOutId));
+        ticketETagIdField.setText(String.valueOf(lastResponse.ticketETagId));
+        hubIdField.setText(String.valueOf(lastResponse.hubId));
         if (lastResponse.etag != null && !lastResponse.etag.isEmpty()) etagField.setText(lastResponse.etag.trim());
-        if (lastResponse.station != 0) stationField.setText(String.valueOf(lastResponse.station));
-        if (lastResponse.lane != 0) laneField.setText(String.valueOf(lastResponse.lane));
+        if (lastResponse.station != 0) {
+            stationField.setText(String.valueOf(lastResponse.station));
+            stationInField.setText(String.valueOf(lastResponse.station));
+            stationOutField.setText(String.valueOf(lastResponse.station));
+        }
+        if (lastResponse.lane != 0) {
+            laneField.setText(String.valueOf(lastResponse.lane));
+            laneInField.setText(String.valueOf(lastResponse.lane));
+            laneOutField.setText(String.valueOf(lastResponse.lane));
+        }
         if (lastResponse.plate != null && !lastResponse.plate.isEmpty()) plateField.setText(lastResponse.plate.trim());
         appendStatus("Đã refill từ response trước: " + lastResponse.summary);
     }
@@ -359,6 +738,22 @@ public class FeTestClientApp extends JFrame {
         int status = (int) parseLong(statusField.getText(), 0);
         int minBalance = (int) parseLong(minBalanceField.getText(), 0);
 
+        long ticketInId = parseLong(ticketInIdField.getText(), 0);
+        long ticketOutId = parseLong(ticketOutIdField.getText(), 0);
+        long ticketETagId = parseLong(ticketETagIdField.getText(), 0);
+        long hubId = parseLong(hubIdField.getText(), 0);
+        long checkinDt = parseLong(checkinDatetimeField.getText(), 0);
+        long checkinCommitDt = parseLong(checkinCommitDatetimeField.getText(), 0);
+        int stationIn = (int) parseLong(stationInField.getText(), 0);
+        int laneIn = (int) parseLong(laneInField.getText(), 0);
+        int stationOut = (int) parseLong(stationOutField.getText(), 0);
+        int laneOut = (int) parseLong(laneOutField.getText(), 0);
+        int transAmount = (int) parseLong(transAmountField.getText(), 0);
+        long transDatetime = parseLong(transDatetimeField.getText(), 0);
+        int priceTicketType = (int) parseLong(priceTicketTypeField.getText(), 0);
+        int ratingDetailLine = (int) parseLong(ratingDetailLineField.getText(), 0);
+        String ticketType = ticketTypeField.getText().trim();
+
         switch (commandIndex) {
             case CMD_CHECKIN:
                 return FeMessageBuilder.buildCheckin(reqId, sessionId, etag, station, lane, plate, tid, hash);
@@ -370,6 +765,12 @@ public class FeTestClientApp extends JFrame {
                 return FeMessageBuilder.buildLookupVehicle(reqId, sessionId, System.currentTimeMillis(), tid, etag, station, lane, "C", "I", null, null);
             case CMD_QUERY_VEHICLE_BOO:
                 return FeMessageBuilder.buildQueryVehicleBoo(reqId, sessionId, System.currentTimeMillis(), tid, etag, station, lane, "C", "I", minBalance, null, null);
+            case CMD_CHECKOUT_RESERVE:
+                return FeMessageBuilder.buildCheckoutReserveBoo(reqId, sessionId, System.currentTimeMillis(), tid, etag, ticketInId, hubId, ticketETagId, ticketOutId, checkinDt, checkinCommitDt, stationIn, laneIn, stationOut, laneOut, plate, ticketType, priceTicketType, transAmount, transDatetime, ratingDetailLine, null, null);
+            case CMD_CHECKOUT_COMMIT:
+                return FeMessageBuilder.buildCheckoutCommitBoo(reqId, sessionId, System.currentTimeMillis(), tid, etag, ticketInId, hubId, ticketOutId, ticketETagId, stationIn, laneIn, stationOut, laneOut, plate, transAmount, transDatetime, null, null);
+            case CMD_CHECKOUT_ROLLBACK:
+                return FeMessageBuilder.buildCheckoutRollbackBoo(reqId, sessionId, System.currentTimeMillis(), tid, etag, ticketInId, hubId, ticketOutId, ticketETagId, stationIn, laneIn, stationOut, laneOut, plate, transAmount, transDatetime, null, null);
             default:
                 return null;
         }

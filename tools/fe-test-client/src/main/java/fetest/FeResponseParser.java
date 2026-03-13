@@ -15,6 +15,10 @@ public final class FeResponseParser {
         public long sessionId;
         public int status;
         public long ticketId;
+        public long ticketInId;
+        public long ticketOutId;
+        public long ticketETagId;
+        public long hubId;
         public String etag;
         public int station;
         public int lane;
@@ -76,6 +80,25 @@ public final class FeResponseParser {
             case FeConstants.LOOKUP_VEHICLE_RESP:
                 if (decrypted.length >= 32) r.etag = trimNull(new String(decrypted, 32, Math.min(24, decrypted.length - 32), StandardCharsets.UTF_8));
                 r.summary = String.format("LOOKUP_VEHICLE_RESP status=%d etag=%s", r.status, r.etag != null ? r.etag.trim() : "-");
+                break;
+            case FeConstants.CHECKOUT_RESERVE_BOO_RESP:
+                if (decrypted.length >= 64) {
+                    r.ticketInId = b.getLong(36);
+                    r.hubId = b.getLong(44);
+                    r.ticketETagId = b.getLong(52);
+                    r.ticketOutId = b.getLong(60);
+                }
+                r.summary = String.format("CHECKOUT_RESERVE_BOO_RESP status=%d ticketInId=%d ticketOutId=%d", r.status, r.ticketInId, r.ticketOutId);
+                break;
+            case FeConstants.CHECKOUT_COMMIT_BOO_RESP:
+            case FeConstants.CHECKOUT_ROLLBACK_BOO_RESP:
+                if (decrypted.length >= 64) {
+                    r.ticketInId = b.getLong(36);
+                    r.hubId = b.getLong(44);
+                    r.ticketETagId = b.getLong(52);
+                    r.ticketOutId = b.getLong(60);
+                }
+                r.summary = String.format("%s status=%d", r.commandId == FeConstants.CHECKOUT_COMMIT_BOO_RESP ? "CHECKOUT_COMMIT_BOO_RESP" : "CHECKOUT_ROLLBACK_BOO_RESP", r.status);
                 break;
             default:
                 r.summary = String.format("cmd=0x%02X status=%d sessionId=%d", r.commandId, r.status, r.sessionId);

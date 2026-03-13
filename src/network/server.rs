@@ -17,8 +17,9 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
 use tokio::sync::Semaphore;
 
+use crate::constants::terminate as term_status;
 use super::client_ip::get_real_client_ip;
-use super::connection::handle_connection;
+use super::connection::{handle_connection, send_plain_error_then_close};
 use super::session::{spawn_session_idle_cleanup, spawn_session_update_processor};
 use super::terminate;
 
@@ -66,10 +67,12 @@ pub async fn run_tcp_server(
     let ip_denylist = CompiledIpDenylist::compile(&cfg.ip_denylist);
 
     loop {
-        let (socket, addr) = listener.accept().await?;
+        let (mut socket, addr) = listener.accept().await?;
         let client_ip = get_real_client_ip(&socket, addr);
 
         if !ip_denylist.is_empty() && ip_denylist.matches(client_ip) {
+            tracing::warn!(ip = %client_ip, "[Network] rejecting connection from denylist IP");
+            send_plain_error_then_close(&mut socket, term_status::ERROR_IP_DENIED).await;
             drop(socket);
             continue;
         }
@@ -83,6 +86,7 @@ pub async fn run_tcp_server(
                     ip = %client_ip,
                     "[Network] rejecting connection from blocked IP"
                 );
+                send_plain_error_then_close(&mut socket, term_status::ERROR_IP_BLOCKED).await;
                 drop(socket);
                 continue;
             }

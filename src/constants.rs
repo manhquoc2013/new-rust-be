@@ -413,6 +413,10 @@ pub mod terminate {
     pub const ERROR_HANDSHAKE_TIMEOUT: i32 = 305;
     /// Invalid or broken message format (length header, too many consecutive parse errors).
     pub const ERROR_INVALID_MESSAGE: i32 = 306;
+    /// IP in denylist – connection rejected before auth.
+    pub const ERROR_IP_DENIED: i32 = 307;
+    /// IP blocked (too many failures) – connection rejected before auth.
+    pub const ERROR_IP_BLOCKED: i32 = 308;
 }
 
 /// Cache constants (default TTL for service cache-aside).
