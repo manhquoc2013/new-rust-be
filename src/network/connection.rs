@@ -2,7 +2,9 @@
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::config::Config;
+use crate::constants::fe;
 use crate::crypto::{create_decryptor_with_key, Aes128CbcDec, BlockDecryptMut, Pkcs7};
+use crate::handlers::connect::build_connect_error_response;
 use crate::handlers::processor::process_request;
 use crate::services::TcocConnectionServerService;
 use crate::types::{
@@ -745,8 +747,8 @@ async fn process_message_buffer(
             None
         };
 
-        let reply_bytes = match process_request(
-            decrypted,
+        let (reply_bytes, send_connect_err) = match process_request(
+            decrypted.clone(),
             conn_id,
             command_id,
             cache.clone(),
@@ -757,14 +759,47 @@ async fn process_message_buffer(
         )
         .await
         {
-            Ok(rb) => rb,
+            Ok(rb) => (Some(rb), None),
             Err(e) => {
-                tracing::error!(conn_id, error = %e, "[Network] process_request failed");
-                let mut pending = pending_command.lock().unwrap();
-                *pending = None;
-                // Client receives no reply for this request (permit is released on continue).
-                continue;
+                log_process_request_error(conn_id, e);
+                {
+                    let mut pending = pending_command.lock().unwrap();
+                    *pending = None;
+                }
+                let err_resp = (command_id == fe::CONNECT && decrypted.len() >= 20)
+                    .then(|| {
+                        let version_id = i32::from_le_bytes(decrypted[8..12].try_into().unwrap_or([0; 4]));
+                        let req_id = i64::from_le_bytes(decrypted[12..20].try_into().unwrap_or([0; 8]));
+                        build_connect_error_response(
+                            &encryption_key_str,
+                            version_id,
+                            req_id,
+                            fe::ERROR_REASON_SYSTEM,
+                        )
+                        .ok()
+                    })
+                    .flatten();
+                (None, err_resp)
             }
+        };
+
+        if let Some(err_resp) = send_connect_err {
+            if tx_client_requests
+                .send(IncomingMessage {
+                    conn_id,
+                    command_id: fe::CONNECT_RESP,
+                    request_id,
+                    data: err_resp,
+                })
+                .await
+                .is_err()
+            {
+                return false;
+            }
+        }
+
+        let Some(reply_bytes) = reply_bytes else {
+            continue;
         };
 
         if tx_client_requests
@@ -782,6 +817,11 @@ async fn process_message_buffer(
     }
 
     true
+}
+
+/// Log process_request error and drop it (so the async task stays Send).
+fn log_process_request_error(conn_id: ConnectionId, e: Box<dyn std::error::Error>) {
+    tracing::error!(conn_id, error = %e, "[Network] process_request failed");
 }
 
 fn log_write_error(conn_id: ConnectionId, op: &str, e: std::io::Error) {

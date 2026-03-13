@@ -77,7 +77,7 @@ cargo test -- --ignored
 ### Docker Build
 
 ```bash
-docker build -t rust-core-transaction:latest .
+docker build -t rust-core-be:latest .
 ```
 
 ### Kubernetes Deployment

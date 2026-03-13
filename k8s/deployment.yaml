@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rust-core-transaction
-  namespace: rust-core-transaction
+  name: rust-core-be
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
 spec:
   # HA: 2 replicas; mỗi pod có TICKET_ID_IP_SUFFIX từ metadata.name (app lấy 3 ký tự cuối). Kafka consumer dùng leader lock KeyDB nên chỉ 1 pod consume.
   replicas: 2
   selector:
     matchLabels:
-      app: rust-core-transaction
+      app: rust-core-be
   template:
     metadata:
       labels:
-        app: rust-core-transaction
+        app: rust-core-be
     spec:
       # SECURITY: Use dedicated service account instead of default
       # Sử dụng service account riêng thay vì default
-      serviceAccountName: rust-core-transaction-sa
+      serviceAccountName: rust-core-be-sa
       
       # SECURITY: Explicitly disable service account token automount
       # Vô hiệu hóa rõ ràng việc tự động mount service account token
@@ -69,8 +69,8 @@ spec:
         #   level: "s0:c123,c456"
       
       containers:
-      - name: rust-core-transaction
-        image: hoanvu/rust-core-transaction:latest
+      - name: rust-core-be
+        image: hoanvu/rust-core-be:latest
         imagePullPolicy: IfNotPresent
         
         # SECURITY: Container Security Context
@@ -128,22 +128,22 @@ spec:
         - name: PORT_LISTEN
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: port-listen
         - name: BOOX1_PREFIX_LIST
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: boox1-prefix-list
         - name: BOOX2_PREFIX_LIST
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: boox2-prefix-list
         - name: CACHE_RELOAD_INTERVAL_SECONDS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: cache-reload-interval-seconds
 
         # HA: mỗi pod có TICKET_ID_IP_SUFFIX từ Pod IP (status.podIP) → app nhận dạng IP và lấy 3 chữ số từ 2 octet cuối → tránh trùng giữa các replica.
@@ -167,34 +167,34 @@ spec:
         - name: VDTC_HOST
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: vdtc-host
         - name: VDTC_PORT
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: vdtc-port
         - name: DELAY_TIME_RECONNECT_VDTC
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: delay-time-reconnect-vdtc
         
         # Sensitive VDTC credentials from Secrets
         - name: VDTC_USERNAME
           valueFrom:
             secretKeyRef:
-              name: rust-core-transaction-secrets
+              name: rust-core-be-secrets
               key: vdtc-username
         - name: VDTC_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: rust-core-transaction-secrets
+              name: rust-core-be-secrets
               key: vdtc-password
         - name: VDTC_KEY_ENC
           valueFrom:
             secretKeyRef:
-              name: rust-core-transaction-secrets
+              name: rust-core-be-secrets
               key: vdtc-key-enc
         
         # Cache System configuration
@@ -203,80 +203,80 @@ spec:
         - name: KEYDB_URL
           valueFrom:
             secretKeyRef:
-              name: rust-core-transaction-secrets
+              name: rust-core-be-secrets
               key: keydb-url
 
         # Kafka (optional): set KAFKA_BOOTSTRAP_SERVERS to enable; from ConfigMap
         - name: KAFKA_BOOTSTRAP_SERVERS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-bootstrap-servers
         - name: KAFKA_TOPIC_CHECKIN
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-topic-checkin
         - name: KAFKA_TOPIC_CHECKOUT
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-topic-checkout
         - name: KAFKA_DATA_VERSION
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-data-version
         - name: KAFKA_QUEUE_CAPACITY
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-queue-capacity
         - name: KAFKA_SEND_BATCH_SIZE
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-send-batch-size
         - name: KAFKA_RETRIES
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-retries
         - name: KAFKA_REQUEST_TIMEOUT_MS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-request-timeout-ms
         - name: KAFKA_RETRY_INITIAL_DELAY_MS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-retry-initial-delay-ms
         - name: KAFKA_RETRY_MAX_DELAY_MS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-retry-max-delay-ms
         # HA: Kafka consumer CHECKIN_HUB_INFO (leader lock KeyDB)
         - name: KAFKA_TOPIC_CHECKIN_HUB_ONLINE
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-topic-checkin-hub-online
         - name: KAFKA_CONSUMER_ENABLED
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-consumer-enabled
         - name: KAFKA_CONSUMER_LEADER_LOCK_KEY
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-consumer-leader-lock-key
         - name: KAFKA_CONSUMER_LEADER_LOCK_TTL_SECS
           valueFrom:
             configMapKeyRef:
-              name: rust-core-transaction-config
+              name: rust-core-be-config
               key: kafka-consumer-leader-lock-ttl-secs
 
         resources:
@@ -312,10 +312,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: rust-core-transaction-service
-  namespace: rust-core-transaction
+  name: rust-core-be-service
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
 spec:
   type: ClusterIP
   externalTrafficPolicy: Local
@@ -326,4 +326,4 @@ spec:
     protocol: TCP
     name: http
   selector:
-    app: rust-core-transaction
+    app: rust-core-be

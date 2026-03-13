@@ -7,10 +7,10 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: rust-core-transaction-role
-  namespace: rust-core-transaction
+  name: rust-core-be-role
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
     security: "rbac-enabled"
 rules:
   # Allow reading ConfigMaps in the same namespace
@@ -19,7 +19,7 @@ rules:
   # Lưu ý: Hiện tại không được sử dụng vì automountServiceAccountToken là false
   - apiGroups: [""]
     resources: ["configmaps"]
-    resourceNames: ["rust-core-transaction-config"]
+    resourceNames: ["rust-core-be-config"]
     verbs: ["get", "list"]
   
   # Allow reading Secrets in the same namespace
@@ -28,7 +28,7 @@ rules:
   # Lưu ý: Hiện tại không được sử dụng vì automountServiceAccountToken là false
   - apiGroups: [""]
     resources: ["secrets"]
-    resourceNames: ["rust-core-transaction-secrets"]
+    resourceNames: ["rust-core-be-secrets"]
     verbs: ["get", "list"]
   
   # Note: If the application needs to read other resources, add them here
@@ -44,16 +44,16 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: rust-core-transaction-rolebinding
-  namespace: rust-core-transaction
+  name: rust-core-be-rolebinding
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
     security: "rbac-enabled"
 subjects:
   - kind: ServiceAccount
-    name: rust-core-transaction-sa
-    namespace: rust-core-transaction
+    name: rust-core-be-sa
+    namespace: rust-core-be
 roleRef:
   kind: Role
-  name: rust-core-transaction-role
+  name: rust-core-be-role
   apiGroup: rbac.authorization.k8s.io

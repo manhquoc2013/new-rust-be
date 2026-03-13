@@ -68,7 +68,7 @@ Chỉnh sửa file `docker-compose.yml` nếu cần thay đổi:
 
 ```bash
 # Build image (nếu chưa có)
-docker build -t hoanvu/rust-core-transaction:latest .
+docker build -t hoanvu/rust-core-be:latest .
 
 # Chạy với docker-compose
 docker-compose up -d
@@ -94,7 +94,7 @@ Chỉnh sửa file `docker-run.ps1` và cập nhật các giá trị environment
 
 # Hoặc chạy trực tiếp lệnh docker run
 docker run -d `
-  --name rust-core-transaction `
+  --name rust-core-be `
   --restart unless-stopped `
   -p 19002:19002 `
   --add-host=host.docker.internal:host-gateway `
@@ -107,7 +107,7 @@ docker run -d `
   -e VDTC_PASSWORD=123456a@ `
   -e VDTC_KEY_ENC=2F5ADF381CA64BDE `
   -e DELAY_TIME_RECONNECT_VDTC=5 `
-  hoanvu/rust-core-transaction:latest
+  hoanvu/rust-core-be:latest
 ```
 
 ## Cách 3: Sử dụng Docker Run (Bash/Linux/Mac)
@@ -127,7 +127,7 @@ chmod +x docker-run.sh
 
 # Hoặc chạy trực tiếp lệnh docker run
 docker run -d \
-  --name rust-core-transaction \
+  --name rust-core-be \
   --restart unless-stopped \
   -p 19002:19002 \
   --add-host=host.docker.internal:host-gateway \
@@ -140,7 +140,7 @@ docker run -d \
   -e VDTC_PASSWORD=123456a@ \
   -e VDTC_KEY_ENC=2F5ADF381CA64BDE \
   -e DELAY_TIME_RECONNECT_VDTC=5 \
-  hoanvu/rust-core-transaction:latest
+  hoanvu/rust-core-be:latest
 ```
 
 ## Quản lý Container
@@ -149,7 +149,7 @@ docker run -d \
 
 ```bash
 # Xem logs real-time
-docker logs -f rust-core-transaction
+docker logs -f rust-core-be
 
 # Xem logs với docker-compose
 docker-compose logs -f
@@ -159,16 +159,16 @@ docker-compose logs -f
 
 ```bash
 # Dừng container
-docker stop rust-core-transaction
+docker stop rust-core-be
 
 # Start container
-docker start rust-core-transaction
+docker start rust-core-be
 
 # Restart container
-docker restart rust-core-transaction
+docker restart rust-core-be
 
 # Xóa container
-docker rm -f rust-core-transaction
+docker rm -f rust-core-be
 
 # Với docker-compose
 docker-compose stop
@@ -184,20 +184,20 @@ docker-compose down
 docker ps -a
 
 # Xem thông tin container
-docker inspect rust-core-transaction
+docker inspect rust-core-be
 
 # Xem resource usage
-docker stats rust-core-transaction
+docker stats rust-core-be
 ```
 
 ### Exec vào container
 
 ```bash
 # Vào trong container
-docker exec -it rust-core-transaction /bin/bash
+docker exec -it rust-core-be /bin/bash
 
 # Hoặc với sh (nếu bash không có)
-docker exec -it rust-core-transaction /bin/sh
+docker exec -it rust-core-be /bin/sh
 ```
 
 ## Build Image
@@ -208,11 +208,11 @@ Nếu bạn cần build image từ source:
 
 ```bash
 # Build image
-docker build -t hoanvu/rust-core-transaction:latest .
+docker build -t hoanvu/rust-core-be:latest .
 
 # Tag và push lên registry (nếu cần)
-docker tag hoanvu/rust-core-transaction:latest your-registry/rust-core-transaction:latest
-docker push your-registry/rust-core-transaction:latest
+docker tag hoanvu/rust-core-be:latest your-registry/rust-core-be:latest
+docker push your-registry/rust-core-be:latest
 ```
 
 ### Thông tin về Dockerfile
@@ -254,29 +254,29 @@ Dockerfile sử dụng multi-stage build để tối ưu kích thước image:
 
 ```bash
 # Xem logs để tìm lỗi
-docker logs rust-core-transaction
+docker logs rust-core-be
 
 # Xem logs real-time
 docker-compose logs -f
 
 # Kiểm tra container status
-docker ps -a | grep rust-core-transaction
+docker ps -a | grep rust-core-be
 
 # Xem logs chi tiết với timestamps
-docker logs --tail 100 --timestamps rust-core-transaction
+docker logs --tail 100 --timestamps rust-core-be
 ```
 
 ### Container không start
 
 ```bash
 # Xem logs để tìm lỗi
-docker logs rust-core-transaction
+docker logs rust-core-be
 
 # Kiểm tra container status
-docker ps -a | grep rust-core-transaction
+docker ps -a | grep rust-core-be
 
 # Kiểm tra xem image đã được build chưa
-docker images | grep rust-core-transaction
+docker images | grep rust-core-be
 ```
 
 ### Port đã được sử dụng
@@ -339,8 +339,8 @@ docker-compose restart
 1. Dừng và xóa container cũ:
 
    ```bash
-   docker stop rust-core-transaction
-   docker rm rust-core-transaction
+   docker stop rust-core-be
+   docker rm rust-core-be
    ```
 
 2. Chạy lại với giá trị mới (chỉnh sửa script `docker-run.sh` hoặc `docker-run.ps1`):
@@ -432,7 +432,7 @@ Nếu không kết nối được đến VDTC server:
 docker-compose logs -f
 
 # Xem logs của service cụ thể
-docker-compose logs -f rust-core-transaction
+docker-compose logs -f rust-core-be
 
 # Xem logs với timestamps
 docker-compose logs -f --timestamps
@@ -506,12 +506,12 @@ docker-compose logs -f --timestamps
 ### Troubleshooting Tips
 
 1. **Container không start:**
-   - Kiểm tra logs: `docker logs rust-core-transaction`
-   - Kiểm tra environment variables: `docker inspect rust-core-transaction`
+   - Kiểm tra logs: `docker logs rust-core-be`
+   - Kiểm tra environment variables: `docker inspect rust-core-be`
    - Kiểm tra port conflicts: `netstat -an | grep 19002` (Linux) hoặc `netstat -an | findstr 19002` (Windows)
 
 2. **Kết nối đến VDTC server thất bại:**
-   - Kiểm tra network connectivity từ container: `docker exec -it rust-core-transaction ping VDTC_HOST`
+   - Kiểm tra network connectivity từ container: `docker exec -it rust-core-be ping VDTC_HOST`
    - Kiểm tra firewall rules
    - Kiểm tra `host.docker.internal` mapping (Windows/Mac) hoặc IP thực (Linux)
 
@@ -521,7 +521,7 @@ docker-compose logs -f --timestamps
    - Kiểm tra disk space: `df -h` (Linux) hoặc `Get-PSDrive C` (Windows PowerShell)
 
 4. **Performance issues:**
-   - Kiểm tra resource usage: `docker stats rust-core-transaction`
+   - Kiểm tra resource usage: `docker stats rust-core-be`
    - Kiểm tra logs để tìm bottlenecks
    - Cân nhắc tăng resource limits nếu cần
 

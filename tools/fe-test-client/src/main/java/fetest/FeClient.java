@@ -3,6 +3,7 @@ package fetest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -26,9 +27,13 @@ public class FeClient implements AutoCloseable {
     private final String encryptionKey;
     private final AtomicLong requestIdGen = new AtomicLong(System.currentTimeMillis());
 
+    /** Timeout kết nối và đọc (ms). */
+    public static final int CONNECT_AND_READ_TIMEOUT_MS = 5_000;
+
     public FeClient(String host, int port, String encryptionKey) throws IOException {
-        this.socket = new Socket(host, port);
-        this.socket.setSoTimeout(30_000);
+        this.socket = new Socket();
+        this.socket.connect(new InetSocketAddress(host, port), CONNECT_AND_READ_TIMEOUT_MS);
+        this.socket.setSoTimeout(CONNECT_AND_READ_TIMEOUT_MS);
         this.in = socket.getInputStream();
         this.out = socket.getOutputStream();
         this.encryptionKey = encryptionKey != null ? encryptionKey : "";
@@ -104,7 +109,13 @@ public class FeClient implements AutoCloseable {
             throw new IOException("Đọc payload không đủ: " + n + "/" + payloadLen + ". Server có thể đã đóng kết nối.");
         }
         try {
-            return AesCrypto.decrypt(payload, encryptionKey);
+            byte[] decrypted = AesCrypto.decrypt(payload, encryptionKey);
+            if (decrypted == null || decrypted.length == 0) {
+                throw new IOException("Server trả bản tin rỗng. Đã ngắt kết nối.");
+            }
+            return decrypted;
+        } catch (IOException e) {
+            throw e;
         } catch (Exception e) {
             throw new IOException("Giải mã thất bại: " + e.getMessage(), e);
         }

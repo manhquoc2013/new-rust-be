@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: rust-core-transaction
+  name: rust-core-be
   labels:
-    name: rust-core-transaction
-    app: rust-core-transaction
+    name: rust-core-be
+    app: rust-core-be
     # Security: Isolated namespace prevents resource conflicts and improves security
     # Tách biệt namespace để tránh xung đột tài nguyên và cải thiện bảo mật
     security: "isolated"

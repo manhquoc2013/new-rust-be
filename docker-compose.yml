@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  rust-core-transaction:
-    image: hoanvu/rust-core-transaction:latest
-    container_name: rust-core-transaction
+  rust-core-be:
+    image: hoanvu/rust-core-be:latest
+    container_name: rust-core-be
     ports:
       - "19002:19002"
     # SECURITY: Use env_file instead of hardcoded passwords in environment section

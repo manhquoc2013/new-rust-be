@@ -279,6 +279,21 @@ pub async fn process_request(
         )));
     }
 
+    let min_len = fe_protocol::min_len_for_command(command_id);
+    if data.len() < min_len {
+        tracing::error!(
+            conn_id,
+            data_len = data.len(),
+            min_len,
+            command_id = %format!("0x{:02X}", command_id),
+            "[Processor] request shorter than min message length"
+        );
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("FE request too short: {} bytes (min {} for command 0x{:02X})", data.len(), min_len, command_id),
+        )));
+    }
+
     let message_length = i32::from_le_bytes(data[0..4].try_into().unwrap());
     let _message_len = if message_length <= 0 || message_length as usize > data.len() {
         data.len()

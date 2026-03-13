@@ -78,30 +78,31 @@ RUN useradd -m -u 1000 appuser
 # Set working directory
 WORKDIR /app
 
-# Copy all Altibase ODBC libraries from libs folder
-# Copy tat ca cac thu vien Altibase ODBC tu folder libs
-COPY libs/libaltibase_odbc-64bit-ul64.so /usr/lib/libaltibase_odbc-64bit-ul64.so
-COPY libs/libodbccli_sl.so /usr/lib/libodbccli_sl.so
-COPY libs/libalticapi_sl.so /usr/lib/libalticapi_sl.so
-
-# Create symlinks for ODBC libraries that Altibase driver expects
-# Tao symlinks cho cac thu vien ODBC ma Altibase driver can
-RUN ln -sf /usr/lib/x86_64-linux-gnu/libodbcinst.so.2 /usr/lib/libodbcinst.so && \
-    ln -sf /usr/lib/libodbccli_sl.so /usr/lib/libodbccli.so && \
-    ln -sf /usr/lib/libalticapi_sl.so /usr/lib/libalticapi.so && \
-    ldconfig
-
-# Create ODBC driver configuration
-# Tao file cau hinh ODBC driver
-RUN echo "[ALTIBASE_HDB_ODBC_64bit]" > /etc/odbcinst.ini && \
-    echo "Description = Altibase HDB ODBC Driver 64-bit" >> /etc/odbcinst.ini && \
-    echo "Driver = /usr/lib/libaltibase_odbc-64bit-ul64.so" >> /etc/odbcinst.ini && \
-    echo "Setup = /usr/lib/libaltibase_odbc-64bit-ul64.so" >> /etc/odbcinst.ini && \
-    echo "FileUsage = 1" >> /etc/odbcinst.ini
+# Copy libs/ (may contain Altibase ODBC .so or only README). If all three .so present, install driver.
+# Copy libs/ (co the chua Altibase ODBC .so hoac chi README). Neu du 3 file .so thi cai driver.
+COPY libs/ /tmp/libs/
+RUN set -e; \
+    if [ -f /tmp/libs/libalticapi_sl.so ] && [ -f /tmp/libs/libodbccli_sl.so ] && [ -f /tmp/libs/libaltibase_odbc-64bit-ul64.so ]; then \
+        cp /tmp/libs/libaltibase_odbc-64bit-ul64.so /usr/lib/ && \
+        cp /tmp/libs/libodbccli_sl.so /usr/lib/ && \
+        cp /tmp/libs/libalticapi_sl.so /usr/lib/ && \
+        ln -sf /usr/lib/x86_64-linux-gnu/libodbcinst.so.2 /usr/lib/libodbcinst.so && \
+        ln -sf /usr/lib/libodbccli_sl.so /usr/lib/libodbccli.so && \
+        ln -sf /usr/lib/libalticapi_sl.so /usr/lib/libalticapi.so && \
+        ldconfig && \
+        echo "[ALTIBASE_HDB_ODBC_64bit]" > /etc/odbcinst.ini && \
+        echo "Description = Altibase HDB ODBC Driver 64-bit" >> /etc/odbcinst.ini && \
+        echo "Driver = /usr/lib/libaltibase_odbc-64bit-ul64.so" >> /etc/odbcinst.ini && \
+        echo "Setup = /usr/lib/libaltibase_odbc-64bit-ul64.so" >> /etc/odbcinst.ini && \
+        echo "FileUsage = 1" >> /etc/odbcinst.ini; \
+    else \
+        echo "Altibase ODBC libs not in libs/ - image runs without Altibase driver."; \
+    fi; \
+    rm -rf /tmp/libs
 
 # Copy binary from builder stage
 # Binary name is based on package name in Cargo.toml: "Rust-core-transaction"
-COPY --from=builder /app/target/release/Rust-core-transaction /app/rust-core-transaction
+COPY --from=builder /app/target/release/Rust-core-transaction /app/rust-core-be
 
 # Change ownership to appuser
 RUN chown -R appuser:appuser /app
@@ -116,4 +117,4 @@ EXPOSE 19002
 # See k8s/deployment.yaml for configuration
 
 # Run the application
-CMD ["./rust-core-transaction"]
+CMD ["./rust-core-be"]

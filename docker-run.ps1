@@ -1,8 +1,8 @@
-# Docker run command for rust-core-transaction (PowerShell)
+# Docker run command for rust-core-be (PowerShell)
 # Update the environment variables below with your actual values
 
 docker run -d `
-  --name rust-core-transaction `
+  --name rust-core-be `
   --restart unless-stopped `
   -p 19002:19002 `
   --add-host=host.docker.internal:host-gateway `
@@ -15,6 +15,6 @@ docker run -d `
   -e VDTC_PASSWORD=123456a@ `
   -e VDTC_KEY_ENC=2F5ADF381CA64BDE `
   -e DELAY_TIME_RECONNECT_VDTC=5 `
-  hoanvu/rust-core-transaction:latest
+  hoanvu/rust-core-be:latest
 
-Write-Host "Container started. Check logs with: docker logs -f rust-core-transaction" -ForegroundColor Green
+Write-Host "Container started. Check logs with: docker logs -f rust-core-be" -ForegroundColor Green

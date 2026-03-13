@@ -12,18 +12,18 @@
     If omitted, image is only built and tagged locally without push.
 
 .PARAMETER ImageName
-    Optional. Name of the image. Default: "rust-core-transaction".
+    Optional. Name of the image. Default: "rust-core-be".
 
 .PARAMETER Tag
     Optional. Image tag. Defaults to version from Cargo.toml (e.g. "0.1.9").
 
 .EXAMPLE
-    .\docker-build-push.ps1 -ImageName rust-core-transaction
-    Builds and tags as rust-core-transaction:<version>, no push.
+    .\docker-build-push.ps1 -ImageName rust-core-be
+    Builds and tags as rust-core-be:<version>, no push.
 
 .EXAMPLE
-    .\docker-build-push.ps1 -Repository ghcr.io/myorg -ImageName rust-core-transaction
-    Builds, tags as ghcr.io/myorg/rust-core-transaction:0.1.9, pushes.
+    .\docker-build-push.ps1 -Repository ghcr.io/myorg -ImageName rust-core-be
+    Builds, tags as ghcr.io/myorg/rust-core-be:0.1.9, pushes.
 
 .EXAMPLE
     .\docker-build-push.ps1 -Repository myregistry.azurecr.io/apps -ImageName etc-middleware -Tag 1.0.0
@@ -35,7 +35,7 @@ param(
     [string]$Repository,
 
     [Parameter(Mandatory = $false)]
-    [string]$ImageName = "rust-core-transaction",
+    [string]$ImageName = "rust-core-be",
 
     [Parameter(Mandatory = $false)]
     [string]$Tag

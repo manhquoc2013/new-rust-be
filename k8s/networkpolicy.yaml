@@ -3,17 +3,17 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: rust-core-transaction-netpol
-  namespace: rust-core-transaction
+  name: rust-core-be-netpol
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
     security: "network-isolated"
 spec:
   # Apply this policy to pods with this label
   # Áp dụng policy này cho pods có label này
   podSelector:
     matchLabels:
-      app: rust-core-transaction
+      app: rust-core-be
   
   policyTypes:
     - Ingress
@@ -27,10 +27,10 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              name: rust-core-transaction
+              name: rust-core-be
         - podSelector:
             matchLabels:
-              app: rust-core-transaction
+              app: rust-core-be
       ports:
         - protocol: TCP
           port: 9001
@@ -77,10 +77,10 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
-              name: rust-core-transaction
+              name: rust-core-be
         - podSelector:
             matchLabels:
-              app: rust-core-transaction
+              app: rust-core-be
       ports:
         - protocol: TCP
           port: 9001

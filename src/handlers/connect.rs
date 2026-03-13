@@ -17,6 +17,25 @@ use std::error::Error;
 use std::time::Instant;
 use tokio::io::AsyncWriteExt;
 
+/// Builds encrypted CONNECT_RESP with error status (sync). Used by network layer when process_request fails so client receives a response instead of timing out.
+pub fn build_connect_error_response(
+    encryption_key: &str,
+    version_id: i32,
+    request_id: i64,
+    status: i32,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut buffer = Vec::with_capacity(32);
+    buffer.extend_from_slice(&(fe_protocol::CONNECT_RESP_LEN as i32).to_le_bytes());
+    buffer.extend_from_slice(&fe::CONNECT_RESP.to_le_bytes());
+    buffer.extend_from_slice(&version_id.to_le_bytes());
+    buffer.extend_from_slice(&request_id.to_le_bytes());
+    buffer.extend_from_slice(&0i64.to_le_bytes()); // session_id
+    buffer.extend_from_slice(&status.to_le_bytes());
+    let encryptor = create_encryptor_with_key(encryption_key);
+    let encrypted = encryptor.clone().encrypt_padded_vec_mut::<Pkcs7>(&buffer);
+    Ok(wrap_encrypted_reply(encrypted))
+}
+
 /// Sends FE_CONNECT_RESP with error status (e.g. 301, 305, 306). Message length 32 bytes (2.3.1.7.2).
 async fn send_connect_error(
     encryptor: &Aes128CbcEnc,

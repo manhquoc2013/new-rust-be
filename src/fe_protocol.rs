@@ -70,6 +70,24 @@ pub mod len {
     pub const CHECKOUT_ROLLBACK_BOO: usize = 178;
 }
 
+/// Minimum decrypted payload length per command_id (spec 2.3.1.7). Used by processor to reject too-short requests and return a clear error.
+pub fn min_len_for_command(command_id: i32) -> usize {
+    match command_id {
+        crate::constants::fe::CONNECT => len::CONNECT,
+        crate::constants::fe::HANDSHAKE => len::HANDSHAKE,
+        crate::constants::fe::TERMINATE => len::TERMINATE,
+        crate::constants::fe::CHECKIN => len::CHECKIN,
+        crate::constants::fe::COMMIT => len::COMMIT,
+        crate::constants::fe::ROLLBACK => len::ROLLBACK,
+        crate::constants::fe::QUERY_VEHICLE_BOO => len::QUERY_VEHICLE_BOO,
+        crate::constants::fe::LOOKUP_VEHICLE => len::LOOKUP_VEHICLE,
+        crate::constants::fe::CHECKOUT_RESERVE_BOO => len::CHECKOUT_RESERVE_BOO_MIN,
+        crate::constants::fe::CHECKOUT_COMMIT_BOO => len::CHECKOUT_COMMIT_BOO,
+        crate::constants::fe::CHECKOUT_ROLLBACK_BOO => len::CHECKOUT_ROLLBACK_BOO,
+        _ => 8, // unknown command: at least header
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Read: request_id, session_id (and ticket_id) from buffer (8-byte IDs)
 // ---------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: rust-core-transaction-config
-  namespace: rust-core-transaction
+  name: rust-core-be-config
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
 data:
   # Application configuration (non-sensitive only)
   # SECURITY: Sensitive data (passwords, keys) should be in Secrets, not ConfigMap

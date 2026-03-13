@@ -114,6 +114,8 @@ public class FeTestClientApp extends JFrame {
             return l;
         });
         connectionCombo.addActionListener(e -> onConnectionSelected());
+        sessionIdField.setEditable(false);
+        sessionIdField.setToolTipText("Từ CONNECT_RESP khi kết nối thành công, dùng xuyên suốt.");
 
         JPanel main = new JPanel(new BorderLayout(8, 8));
         main.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
@@ -470,7 +472,8 @@ public class FeTestClientApp extends JFrame {
             @Override
             protected void done() {
                 if (err != null) {
-                    appendStatus("Kết nối / CONNECT thất bại: " + err);
+                    String msg = isTimeoutOrEmpty(err) ? "Timeout 5s: server không trả bản tin. Đã ngắt kết nối." : err;
+                    appendStatus("Kết nối / CONNECT thất bại: " + msg);
                     connectButton.setEnabled(true);
                     disconnectButton.setEnabled(false);
                     return;
@@ -514,6 +517,12 @@ public class FeTestClientApp extends JFrame {
             } catch (Exception ignored) { }
             client = null;
         }
+    }
+
+    /** True nếu lỗi là timeout đọc hoặc bản tin rỗng (để hiển thị thống nhất). */
+    private static boolean isTimeoutOrEmpty(String err) {
+        if (err == null) return false;
+        return err.contains("timed out") || err.contains("Timeout") || err.contains("bản tin rỗng");
     }
 
     /**
@@ -607,7 +616,8 @@ public class FeTestClientApp extends JFrame {
             protected void done() {
                 reconnectInProgress = false;
                 if (err != null) {
-                    appendStatus("Reconnect thất bại: " + err);
+                    String msg = isTimeoutOrEmpty(err) ? "Timeout 5s: server không trả bản tin. Đã ngắt kết nối." : err;
+                    appendStatus("Reconnect thất bại: " + msg);
                     connectButton.setEnabled(true);
                     disconnectButton.setEnabled(false);
                     return;
@@ -635,7 +645,7 @@ public class FeTestClientApp extends JFrame {
             appendStatus("Chưa có response nào để refill.");
             return;
         }
-        sessionIdField.setText(String.valueOf(lastResponse.sessionId));
+        // session_id chỉ lấy từ CONNECT_RESP khi connect thành công, không ghi đè từ response khác
         ticketIdField.setText(String.valueOf(lastResponse.ticketId));
         ticketInIdField.setText(String.valueOf(lastResponse.ticketInId));
         ticketOutIdField.setText(String.valueOf(lastResponse.ticketOutId));
@@ -671,6 +681,7 @@ public class FeTestClientApp extends JFrame {
         SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
             final List<String> errors = new ArrayList<>();
             final List<FeResponseParser.ParsedResponse> responses = new ArrayList<>();
+            boolean disconnectedDuringSend = false;
 
             @Override
             protected Void doInBackground() throws Exception {
@@ -689,7 +700,14 @@ public class FeTestClientApp extends JFrame {
                         responses.add(pr);
                         lastResponse = pr;
                     } catch (Exception e) {
-                        errors.add("eTag " + etag + ": " + e.getMessage());
+                        String msg = e.getMessage() != null ? e.getMessage() : "";
+                        if (isTimeoutOrEmpty(msg)) {
+                            errors.add("eTag " + etag + ": Timeout 5s: server không trả bản tin. Đã ngắt kết nối.");
+                            closeClientQuietly();
+                            disconnectedDuringSend = true;
+                            break;
+                        }
+                        errors.add("eTag " + etag + ": " + msg);
                     }
                 }
                 return null;
@@ -707,6 +725,12 @@ public class FeTestClientApp extends JFrame {
                         appendStatus("  Hex: " + pr.rawHex.substring(0, 150) + "...");
                     else if (pr.rawHex != null)
                         appendStatus("  Hex: " + pr.rawHex);
+                }
+                if (disconnectedDuringSend) {
+                    appendStatus("Đã ngắt kết nối (server không trả bản tin hoặc timeout 5s).");
+                    connectButton.setEnabled(true);
+                    disconnectButton.setEnabled(false);
+                    if (!userRequestedDisconnect && savedHost != null && !reconnectInProgress) startReconnect();
                 }
                 if (!responses.isEmpty())
                     sendStatusLabel.setText("OK: " + responses.size() + " response(s). " + (errors.isEmpty() ? "" : errors.size() + " lỗi."));
@@ -728,7 +752,7 @@ public class FeTestClientApp extends JFrame {
 
     private byte[] buildRequestForEtag(int commandIndex, String etag) {
         long reqId = client.nextRequestId();
-        long sessionId = parseLong(sessionIdField.getText(), 0);
+        long sessionId = lastSessionId;
         long ticketId = parseLong(ticketIdField.getText(), 0);
         int station = (int) parseLong(stationField.getText(), 0);
         int lane = (int) parseLong(laneField.getText(), 0);

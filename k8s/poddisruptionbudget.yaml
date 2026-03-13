@@ -3,10 +3,10 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: rust-core-transaction-pdb
-  namespace: rust-core-transaction
+  name: rust-core-be-pdb
+  namespace: rust-core-be
   labels:
-    app: rust-core-transaction
+    app: rust-core-be
     security: "high-availability"
 spec:
   # Minimum number of pods that must be available
@@ -16,7 +16,7 @@ spec:
   # Selector để khớp với pods
   selector:
     matchLabels:
-      app: rust-core-transaction
+      app: rust-core-be
   # Unhealthy pod eviction policy
   # Chính sách loại bỏ pod không khỏe mạnh
   unhealthyPodEvictionPolicy: IfHealthyBudget
