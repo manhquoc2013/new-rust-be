@@ -759,13 +759,12 @@ public class FeTestClientApp extends JFrame {
                             errors.add("eTag " + etag + ": Không hỗ trợ command hoặc thiếu tham số.");
                             continue;
                         }
-                        requestLogs.add("[" + etag + "] Request (raw hex): " + bytesToHex(plain));
-                        requestLogs.add("[" + etag + "] Request (unicode): " + bytesToUnicodeSafe(plain));
                         client.send(plain);
                         byte[] respDecrypted = client.receive();
                         FeResponseParser.ParsedResponse pr = FeResponseParser.parse(respDecrypted);
                         responses.add(pr);
                         lastResponse = pr;
+                        appendStatus("  Response: " + (lastResponse != null ? lastResponse.toString() : "(none)"));
                     } catch (Exception e) {
                         String msg = e.getMessage() != null ? e.getMessage() : "";
                         if (isTimeoutOrEmpty(msg)) {
