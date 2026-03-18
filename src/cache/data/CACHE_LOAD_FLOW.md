@@ -11,7 +11,7 @@
 ## 2. Reload cache định kỳ (cache_reload.rs)
 
 - Gọi `get_*_cache(..., load_from_keydb = true)` — khi DB lỗi hoặc không có pool thì fallback đọc từ KeyDB để hệ thống không gián đoạn khi DB mất.
-- **RATING cache** (toll, lane, price, stage, toll_fee_list, subscription_history): reload khi rating_pool_holder có pool; DB thành công → ghi Moka + KeyDB; DB lỗi/không pool → fallback KeyDB, ghi Moka.
+- **RATING cache** (toll, lane, price, closed_cycle_transition_stage, toll_fee_list, subscription_history): reload khi rating_pool_holder có pool; DB thành công → ghi Moka + KeyDB; DB lỗi/không pool → fallback KeyDB, ghi Moka.
 - **Connection cache** (connection server, connection user): reload **chỉ khi** mediation_pool_holder có pool; cùng quy tắc DB/KeyDB như trên.
 - KeyDB không kết nối: `keydb.set()` no-op (chỉ lock, không gửi Redis), không ảnh hưởng luồng.
 - Có `RELOAD_IN_PROGRESS`: reload đang chạy thì bỏ qua chu kỳ tiếp theo.

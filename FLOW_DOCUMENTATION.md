@@ -96,8 +96,8 @@ Hệ thống sử dụng **Tokio async runtime** với 5 task chạy song song:
 1. Khởi tạo logging (file logger, cleanup task, panic hook)
 2. Load configuration từ environment variables
 3. Khởi tạo database pools (RATING_DB, MEDIATION_DB, CRM_DB) — tùy chọn, không panic nếu lỗi
-4. Khởi tạo cache (Moka + KeyDB). Load **RATING cache** (TOLL, TOLL_LANE, PRICE, TOLL_STAGE, TOLL_FEE_LIST, SUBSCRIPTION_HISTORY) — TOLL_STAGE dùng để xây RouteGraph. **Thứ tự load**: Ưu tiên DB; khi KeyDB kết nối thì nếu DB lỗi mới fallback đọc từ KeyDB (ghi vào Moka, không ghi ngược KeyDB). Reload định kỳ: ưu tiên DB, thành công ghi Moka + KeyDB; DB lỗi/không có pool thì fallback KeyDB (load_from_keydb = true).
-5. Bắt đầu task reload cache định kỳ (CACHE_RELOAD_INTERVAL_SECONDS): reload RATING cache (toll, lane, price, stage, toll_fee_list, subscription_history) và **connection cache (server, user)** khi mediation_pool_holder có pool.
+4. Khởi tạo cache (Moka + KeyDB). Load **RATING cache** (TOLL, TOLL_LANE, PRICE, **closed_cycle_transition_stage** (CLOSED_CYCLE_TRANSITION_STAGE + TOLL_STAGE), TOLL_FEE_LIST, SUBSCRIPTION_HISTORY). **Thứ tự load**: Ưu tiên DB; khi KeyDB kết nối thì nếu DB lỗi mới fallback đọc từ KeyDB (ghi vào Moka, không ghi ngược KeyDB). Reload định kỳ: ưu tiên DB, thành công ghi Moka + KeyDB; DB lỗi/không có pool thì fallback KeyDB (load_from_keydb = true).
+5. Bắt đầu task reload cache định kỳ (CACHE_RELOAD_INTERVAL_SECONDS): reload RATING cache (toll, lane, price, closed_cycle_transition_stage, toll_fee_list, subscription_history) và **connection cache (server, user)** khi mediation_pool_holder có pool.
 6. Load **connection data cache** (TCOC_CONNECTION_SERVER, TCOC_USER từ MEDIATION) sau khi reload task đã start; khởi chạy **db_retry task** (DB_RETRY_INTERVAL_SECONDS, dùng mediation_pool_holder) và **DB init retry task** (MEDIATION: định kỳ create_pool("MEDIATION"), khi thành công set mediation_holder và load lại connection cache).
 7. ETDR: start_etdr_db_retry_task (ETDR_RETRY_INTERVAL_SECONDS, ETDR_MAX_RETRY_COUNT; key theo ticket_id nếu set ETDR_RETRY_KEY_PREFIX); mỗi chu kỳ một bản ghi, lock → ghi DB → cập nhật KeyDB/bộ nhớ → release (HA-safe). start_cache_cleanup_task (ETDR_CLEANUP_INTERVAL_SECONDS)
 8. Khởi tạo Kafka producer (tùy chọn): nếu KAFKA_BOOTSTRAP_SERVERS được set thì Kafka init trong background (retry khi lỗi). Nếu consumer_enabled thì spawn run_checkin_hub_consumer: consume topic KAFKA_TOPIC_CHECKIN_HUB_ONLINE (CHECKIN_HUB_INFO), lấy danh sách partition hợp lệ từ metadata (get_valid_partitions), load offset từ KAFKA_CONSUMER_OFFSET_FILE (nếu có), fetch → parse JSON → cập nhật hub_id trong BOO_TRANSPORT_TRANS_STAGE hoặc TRANSPORT_TRANSACTION_STAGE theo ticket_in_id
@@ -421,7 +421,7 @@ Khi `KAFKA_BOOTSTRAP_SERVERS` được cấu hình:
 ### 5. Cache (`src/cache/`)
 
 - **config/**: CacheManager, KeyDB (Redis), MokaCache, cache_prefix
-- **data/**: toll_cache, toll_lane_cache, price_cache, **toll_stage_cache** (đoạn đường thu phí TOLL_STAGE, xây RouteGraph in-memory + CacheManager; build_segment_maps: map (toll_a, toll_b) chuẩn hóa → cycle_id và stage_id; `get_segment_cycle_id`, `get_stage_id_for_segment` dùng cho WB/subscription và tính phí theo đoạn), toll_fee_list_cache, subscription_history_cache, **connection_data_cache** (TCOC_CONNECTION_SERVER, TCOC_USER từ MEDIATION — dùng khi accept connection tra cứu IP → toll_id, encryption_key), **db_retry** (hàng đợi ghi DB qua KeyDB: session FIFO; conn_server/user theo key, ghi đè bản mới nhất; buffer in-memory khi KeyDB fail, task retry flush khi KeyDB có lại; dùng mediation_pool_holder), **wb_route_cache**, **ex_list_cache**, **ex_price_list_cache**, cache_reload task, **dto/** (price_dto, toll_stage_dto, toll_lane_dto, subscription_history_dto, wb_list_route_dto, ex_list_dto, ex_price_list_dto)
+- **data/**: toll_cache, toll_lane_cache, price_cache, **closed_cycle_transition_stage_cache** (CLOSED_CYCLE_TRANSITION_STAGE + TOLL_STAGE; segment maps (toll_a, toll_b) chuẩn hóa → cycle_id và stage_id; `get_segment_cycle_id`, `get_stage_id_for_segment`, `get_toll_a_toll_b_for_stage_id`, `get_segments_for_leg` dùng cho WB/subscription và tính phí theo đoạn), toll_fee_list_cache, subscription_history_cache, **connection_data_cache** (TCOC_CONNECTION_SERVER, TCOC_USER từ MEDIATION — dùng khi accept connection tra cứu IP → toll_id, encryption_key), **db_retry** (hàng đợi ghi DB qua KeyDB: session FIFO; conn_server/user theo key, ghi đè bản mới nhất; buffer in-memory khi KeyDB fail, task retry flush khi KeyDB có lại; dùng mediation_pool_holder), **wb_route_cache**, **ex_list_cache**, **ex_price_list_cache**, cache_reload task, **dto/** (price_dto, toll_lane_dto, subscription_history_dto, wb_list_route_dto, ex_list_dto, ex_price_list_dto)
 
 ### 6. Logging (`src/logging/`)
 
@@ -437,8 +437,8 @@ Khi `KAFKA_BOOTSTRAP_SERVERS` được cấu hình:
 - **ticket_id_service**: Singleton **TicketIdService** — tạo ticket_id dùng chung cho BECT và BOO. Luồng: sequence DB một lần làm prefix, counter 1..suffix_max (ENV TICKET_ID_SUFFIX_MAX), khi đạt TICKET_ID_PREFETCH_THRESHOLD thì prefetch sequence tiếp theo; id = prefix * suffix_multiplier + suffix; không kiểm tra trùng khi dùng id từ block. Nếu DB failed thì fallback `utils::generate_ticket_id_async()`. Retry chỉ khi ticket_id = 0.
 - **transport_trans_stage_tcd_service**: Giai đoạn vận tải và giao dịch TCD. Khi insert/update BOO_TRANS_STAGE_TCD ghi thêm **BOO_TRANS_STAGE_TCD_HIS** (lịch sử).
 - **ip_block_service**: Quản lý block IP: bộ đếm lỗi in-memory theo IP, trạng thái block chỉ lưu Redis/KeyDB. Dùng khi client kết nối lỗi quá ngưỡng (handshake/config/decrypt); block theo IP_BLOCK_DURATION_SECONDS; Redis lỗi → fail-open.
-- **toll_fee** (module): Tính phí cầu đường (rating từ cache/DB, subscription, price_ticket_type, RouteGraph; hỗ trợ WB/Ex list theo BOO). Cấu trúc: **error** (TollFeeError), **types** (TollFeeListContext, ParsedBoo, SegmentInfo, FeeCalculationContext, RatingDetailBuilder), **helpers** (so khớp BOO, hiệu lực subscription/price, white/black/subscription theo đoạn), **detail** (tạo RatingDetail: whitelist, subscription, regular), **segment** (giá theo đoạn, merge route thành segments, BOO từ TOLL), **direct_price** (tính phí direct price: cùng trạm, nhiều đoạn, phân bổ), **flow** (luồng resolve direct price, same station, segment loop, no route), **service** (TollFeeService và calculate_toll_fee).
-- **route_graph**: Đồ thị đường đi giữa các trạm, xây từ bảng TOLL_STAGE (mỗi bản ghi TOLL_A, TOLL_B là một cạnh vô hướng). `RouteGraph::from_cache(cache)` lấy từ toll_stage_cache (in-memory hoặc build từ TOLL_STAGE). Dùng BFS `find_route(toll_a, toll_b)` để tìm đường; dùng cho tính phí tối ưu (optimal route length)
+- **toll_fee** (module): Tính phí cầu đường (rating từ cache/DB, subscription, price_ticket_type, closed_cycle_transition_stage_cache; hỗ trợ WB/Ex list theo BOO). Cấu trúc: **error** (TollFeeError), **types** (TollFeeListContext, ParsedBoo, SegmentInfo, FeeCalculationContext, RatingDetailBuilder), **helpers** (so khớp BOO, hiệu lực subscription/price, white/black/subscription theo đoạn), **detail** (tạo RatingDetail: whitelist, subscription, regular), **segment** (giá theo đoạn, merge route thành segments, BOO từ TOLL), **direct_price** (tính phí direct price: cùng trạm, nhiều đoạn, phân bổ), **flow** (luồng resolve direct price, same station, segment loop, no route), **service** (TollFeeService và calculate_toll_fee).
+- **Tính phí theo đoạn**: Module toll_fee dùng **closed_cycle_transition_stage_cache** (segment maps từ TOLL_STAGE): `get_segment_cycle_id`, `get_stage_id_for_segment`, `get_toll_a_toll_b_for_stage_id`, `get_segments_for_leg` cho WB/subscription và tính phí theo đoạn (segment, direct_price, flow).
 - **kafka_consumer_service**: Consumer Kafka (tùy chọn): run_checkin_hub_consumer nhận bản tin CHECKIN_HUB_INFO từ topic KAFKA_TOPIC_CHECKIN_HUB_ONLINE, parse JSON (hub_id, ticket_in_id), cập nhật hub_id trong BOO_TRANSPORT_TRANS_STAGE (VETC/VDTC) hoặc TRANSPORT_TRANSACTION_STAGE (BECT) theo transport_trans_id hoặc ticket_id. Lấy partition hợp lệ từ metadata (get_valid_partitions); offset đọc/ghi từ file (KAFKA_CONSUMER_OFFSET_FILE)
 - **kafka_producer_service/** (mod.rs, service.rs, types.rs): Producer Kafka (tùy chọn). Handler gọi `get_kafka_producer()` rồi `send_checkin_from_commit_background`/`send_checkout_from_commit_background` → đẩy vào hàng đợi; worker task lấy từ queue, build event (CheckinEvent/CheckoutEvent), gửi lên **cùng một topic** `topic_trans_hub_online` (KAFKA_TOPIC_TRANS_HUB_ONLINE) với retry + backoff. **Partition**: số partition lấy từ cache (get_partition_count_cached); ưu tiên config `KAFKA_TOPIC_TRANS_PARTITION_COUNT` (không gọi list_topics); hoặc `KAFKA_TOPIC_TRANS_FIXED_PARTITION` (0-based) để gửi cố định một partition; không set thì hash(key) % num_partitions. Batch gửi nhóm record theo partition, mỗi partition một round-trip produce(); timeout tăng theo số partition. Hàng đợi có giới hạn (queue_capacity); khi đầy thì bỏ event cũ nhất (drop oldest).
 - **cache**: MemoryCache, DistributedCache
@@ -714,6 +714,8 @@ KAFKA_RETRY_MAX_DELAY_MS=60000
 
 ## 🚀 Hướng Dẫn Cho Thành Viên Mới
 
+**Yêu cầu hệ thống, cách build, Docker, công cụ test:** Xem **[README.md](README.md)** (Yêu Cầu Hệ Thống, Cài Đặt & Chạy, Build bản release, Testing, Build và Deploy, Công Cụ Test FE).
+
 ### 1. Setup Môi Trường Phát Triển
 
 ```bash
@@ -722,20 +724,20 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Clone repository
 git clone <repository_url>
-cd Rust-core-transaction
+cd new-rust-be
 
 # Copy env template
 cp env.template .env
-
-# Chỉnh sửa .env với các giá trị thực tế
-# ...
+# Chỉnh sửa .env với các giá trị thực tế (PORT_LISTEN, VDTC_*, VETC_*, BOOX1/2_PREFIX_LIST, ...)
 
 # Build project
 cargo build
 
-# Chạy project
+# Chạy
 cargo run
 ```
+
+**Build release:** `cargo build --release`. **Chạy test:** `cargo test` (unit); `cargo test -- --ignored` (tests cần DB). **Công cụ test FE:** Java client trong `tools/fe-test-client/` — xem [tools/fe-test-client/README.md](tools/fe-test-client/README.md).
 
 ### 2. Cấu Trúc Thư Mục
 
@@ -754,7 +756,7 @@ Rust-core-transaction/
 │   ├── crypto/              # AES encryption/decryption
 │   ├── cache/               # Cache
 │   │   ├── config/          # CacheManager, KeyDB, MokaCache
-│   │   └── data/            # toll_cache, toll_lane_cache, price_cache, toll_cycle_cache, cache_reload, dto
+│   │   └── data/            # toll_cache, toll_lane_cache, price_cache, closed_cycle_transition_stage_cache, cache_reload, dto
 │   ├── logging/             # File logger, cleanup log, process_type, rotation
 │   ├── db/                  # Database repositories (tcoc_sessions, tcoc_request, ...)
 │   ├── handlers/            # Request handlers
@@ -780,7 +782,7 @@ Rust-core-transaction/
 │   │   └── boo2_client.rs   # VDTC client
 │   ├── services/            # Business services
 │   │   ├── kafka_producer_service/  # Kafka producer (mod, service, types): checkin/checkout events, queue + worker
-│   │   ├── tcoc_*_service.rs, route_graph, cache, ...
+│   │   ├── tcoc_*_service.rs, toll_fee/, cache, ...
 │   │   ├── toll_fee/                     # Module tính phí: mod, service, error, types, helpers, detail, segment, direct_price, flow
 │   │   └── mod.rs
 │   ├── utils/               # Utility functions
@@ -791,8 +793,14 @@ Rust-core-transaction/
 │   │   └── mod.rs
 │   └── types.rs             # Type definitions (ConnectionId, IncomingMessage, ...)
 ├── Cargo.toml               # Dependencies
-├── Dockerfile               # Docker build
-├── docker-compose.yml       # Docker compose
+├── Cargo.lock               # Lock file (bắt buộc cho Docker build)
+├── Dockerfile               # Docker build (Rust 1.93, multi-stage)
+├── docker-compose.yml       # Docker Compose
+├── docker-build-push.sh     # Script build & push image (Mac/Linux)
+├── DOCKER.md                # Hướng dẫn Docker / Docker Compose
+├── tools/
+│   └── fe-test-client/      # FE Test Client (Java/Swing) – test giao thức FE
+├── libs/                    # Tùy chọn: thư viện ODBC Altibase cho Docker
 └── env.template             # Template biến môi trường (PORT, DB, Kafka, ...)
 ```
 
@@ -814,21 +822,14 @@ Rust-core-transaction/
 
 ### 5. Debug và Logging
 
-- Sử dụng `eprintln!()` cho debug logs (hiển thị trên stderr)
-- Sử dụng `println!()` cho info logs (hiển thị trên stdout)
-- Format log: `[request_id] 🎯 Message`
+- Điều chỉnh mức log qua biến môi trường: `RUST_LOG=debug cargo run` (hoặc `info`, `warn`, `error`).
+- Log dùng `tracing`; quy ước (prefix component, structured fields, tiếng Anh): xem `.cursor/rules/logging.mdc`.
 
 ### 6. Testing
 
-```bash
-# Build
-cargo build
-
-# Run với debug
-RUST_LOG=debug cargo run
-
-# Test với client giả lập (cần implement test client)
-```
+- **Unit tests (không cần DB):** `cargo test`
+- **Tests cần DB:** Cấu hình `RATING_DB_*` / `MEDIATION_DB_*` / `CRM_DB_*` rồi chạy `cargo test -- --ignored`
+- **Test giao thức FE:** Dùng FE Test Client (Java) trong `tools/fe-test-client/` — xem [README](README.md#-testing) và [tools/fe-test-client/README.md](tools/fe-test-client/README.md)
 
 ### 7. Common Issues và Solutions
 
@@ -963,7 +964,6 @@ Khi vẫn ghi DB nhưng trả lỗi (vd. kiểm tra tài khoản/số dư thất
 | Mục | File | Mô tả |
 |-----|------|--------|
 | Lịch sử phiên bản | [CHANGELOG.md](CHANGELOG.md) | Changelog theo phiên bản (tách riêng) |
-| Luồng DB | `docs/DB_FLOWS.md` | Pool RATING/MEDIATION/CRM, holder, spawn_blocking, get_connection_with_retry |
 | Load cache | `src/cache/data/CACHE_LOAD_FLOW.md` | Startup và reload định kỳ (DB + KeyDB) |
 | Database | `src/db/README.md` | Repository pattern, entity/mapper, sequences |
 
@@ -975,5 +975,5 @@ Lịch sử thay đổi theo phiên bản được lưu trong file riêng. Xem: 
 
 ---
 
-**Cập nhật lần cuối**: 2026-03-06 16:46  
-**Phiên bản hiện tại**: 0.2.5
+**Cập nhật lần cuối**: 2026-03-18 11:07  
+**Phiên bản hiện tại**: 0.1.0

@@ -49,8 +49,8 @@ else
 fi
 
 LOCAL_IMAGE="${IMAGE_NAME}:${TAG}"
-echo "Building Docker image: $LOCAL_IMAGE"
-docker build -t "$LOCAL_IMAGE" .
+echo "Building Docker image: $LOCAL_IMAGE (platform: linux/amd64)"
+docker build --platform linux/amd64 -t "$LOCAL_IMAGE" .
 
 if [ -n "$REPOSITORY" ]; then
   REMOTE_IMAGE="${REPOSITORY%/}/${IMAGE_NAME}:${TAG}"

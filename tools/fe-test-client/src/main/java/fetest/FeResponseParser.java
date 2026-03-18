@@ -42,11 +42,20 @@ public final class FeResponseParser {
         ByteBuffer b = ByteBuffer.wrap(decrypted).order(ByteOrder.LITTLE_ENDIAN);
         int msgLen = b.getInt(0);
         r.commandId = b.getInt(4);
-        if (decrypted.length >= 20) {
-            r.requestId = b.getLong(8);
-            r.sessionId = b.getLong(16);
+        // CONNECT_RESP / SHAKE_RESP / TERMINATE_RESP: 32 bytes, layout version_id(8..12), request_id(12..20), session_id(20..28), status(28..32)
+        if (r.commandId == FeConstants.CONNECT_RESP || r.commandId == FeConstants.SHAKE_RESP || r.commandId == FeConstants.TERMINATE_RESP) {
+            if (decrypted.length >= 32) {
+                r.requestId = b.getLong(12);
+                r.sessionId = b.getLong(20);
+                r.status = b.getInt(28);
+            }
+        } else {
+            if (decrypted.length >= 20) {
+                r.requestId = b.getLong(8);
+                r.sessionId = b.getLong(16);
+            }
+            if (decrypted.length >= 24) r.status = b.getInt(20);
         }
-        if (decrypted.length >= 24) r.status = b.getInt(20);
 
         switch (r.commandId) {
             case FeConstants.CONNECT_RESP:
@@ -69,34 +78,60 @@ public final class FeResponseParser {
                 break;
             case FeConstants.COMMIT_RESP:
             case FeConstants.ROLLBACK_RESP:
+                // 28 bytes: msg_len(0..4), cmd(4..8), request_id(8..16), session_id(16..24), status(24..28)
+                if (decrypted.length >= 28) {
+                    r.requestId = b.getLong(8);
+                    r.sessionId = b.getLong(16);
+                    r.status = b.getInt(24);
+                }
                 r.summary = String.format("%s status=%d", r.commandId == FeConstants.COMMIT_RESP ? "COMMIT_RESP" : "ROLLBACK_RESP", r.status);
                 break;
             case FeConstants.TERMINATE_RESP:
                 r.summary = String.format("TERMINATE_RESP status=%d", r.status);
                 break;
             case FeConstants.QUERY_VEHICLE_BOO_RESP:
+                // 133 bytes: version_id(8..12), request_id(12..20), session_id(20..28), timestamp(28..36), process_time(36..40), etag(40..64), ..., status(101..105), min_balance_status(105..109)
+                if (decrypted.length >= 109) {
+                    r.requestId = b.getLong(12);
+                    r.sessionId = b.getLong(20);
+                    r.status = b.getInt(101);
+                }
                 r.summary = String.format("QUERY_VEHICLE_BOO_RESP status=%d", r.status);
                 break;
             case FeConstants.LOOKUP_VEHICLE_RESP:
-                if (decrypted.length >= 32) r.etag = trimNull(new String(decrypted, 32, Math.min(24, decrypted.length - 32), StandardCharsets.UTF_8));
+                // 197 bytes: same header as QUERY_VEHICLE_BOO_RESP then extra 64; etag(40..64), status(101..105)
+                if (decrypted.length >= 64) {
+                    r.requestId = b.getLong(12);
+                    r.sessionId = b.getLong(20);
+                    r.etag = trimNull(new String(decrypted, 40, Math.min(24, decrypted.length - 40), StandardCharsets.UTF_8));
+                }
+                if (decrypted.length >= 105) r.status = b.getInt(101);
                 r.summary = String.format("LOOKUP_VEHICLE_RESP status=%d etag=%s", r.status, r.etag != null ? r.etag.trim() : "-");
                 break;
             case FeConstants.CHECKOUT_RESERVE_BOO_RESP:
-                if (decrypted.length >= 64) {
-                    r.ticketInId = b.getLong(36);
-                    r.hubId = b.getLong(44);
-                    r.ticketETagId = b.getLong(52);
-                    r.ticketOutId = b.getLong(60);
+                // 100 bytes: version_id(8..12), request_id(12..20), session_id(20..28), timestamp(28..36), process_time(36..40), ticket_in_id(40..48), hub_id(48..56), ticket_eTag_id(56..64), ticket_out_id(64..72), status(72..76)
+                if (decrypted.length >= 76) {
+                    r.requestId = b.getLong(12);
+                    r.sessionId = b.getLong(20);
+                    r.ticketInId = b.getLong(40);
+                    r.hubId = b.getLong(48);
+                    r.ticketETagId = b.getLong(56);
+                    r.ticketOutId = b.getLong(64);
+                    r.status = b.getInt(72);
                 }
                 r.summary = String.format("CHECKOUT_RESERVE_BOO_RESP status=%d ticketInId=%d ticketOutId=%d", r.status, r.ticketInId, r.ticketOutId);
                 break;
             case FeConstants.CHECKOUT_COMMIT_BOO_RESP:
             case FeConstants.CHECKOUT_ROLLBACK_BOO_RESP:
-                if (decrypted.length >= 64) {
+                // 96 bytes: version_id(8..12), request_id(12..20), session_id(20..28), timestamp(28..36), ticket_in_id(36..44), hub_id(44..52), ticket_eTag_id(52..60), ticket_out_id(60..68), status(68..72)
+                if (decrypted.length >= 72) {
+                    r.requestId = b.getLong(12);
+                    r.sessionId = b.getLong(20);
                     r.ticketInId = b.getLong(36);
                     r.hubId = b.getLong(44);
                     r.ticketETagId = b.getLong(52);
                     r.ticketOutId = b.getLong(60);
+                    r.status = b.getInt(68);
                 }
                 r.summary = String.format("%s status=%d", r.commandId == FeConstants.CHECKOUT_COMMIT_BOO_RESP ? "CHECKOUT_COMMIT_BOO_RESP" : "CHECKOUT_ROLLBACK_BOO_RESP", r.status);
                 break;

@@ -16,22 +16,22 @@ pub mod fe {
     /// SHAKE_RESP – Backend trả FE sau khi xử lý HANDSHAKE (32 bytes).
     pub const SHAKE_RESP: i32 = 0x6F;
 
-    /// CHECKIN – FE gửi req (172 bytes). Backend trả CHECKIN_RESP.
+    /// CHECKIN – FE gửi req (106 bytes). Backend trả CHECKIN_RESP (98 bytes). Spec 2.3.1.7.5/2.3.1.7.6 BOO format: 172/76.
     pub const CHECKIN: i32 = 0x66;
 
-    /// CHECKIN_RESP – Backend trả FE sau khi xử lý CHECKIN (76 bytes).
+    /// CHECKIN_RESP – Backend trả FE sau khi xử lý CHECKIN (98 bytes).
     pub const CHECKIN_RESP: i32 = 0x67;
 
-    /// COMMIT – FE gửi req (152 bytes, spec 3A). Backend trả COMMIT_RESP. Processor gọi handle_commit.
+    /// COMMIT – FE gửi req (98 bytes). Backend trả COMMIT_RESP (28 bytes). Spec 2.3.1.7.7/2.3.1.7.8 BOO format: 152/84.
     pub const COMMIT: i32 = 0x68;
 
-    /// COMMIT_RESP – Backend trả FE sau khi xử lý COMMIT (84 bytes, spec 3B).
+    /// COMMIT_RESP – Backend trả FE sau khi xử lý COMMIT (28 bytes).
     pub const COMMIT_RESP: i32 = 0x69;
 
-    /// ROLLBACK – FE gửi req (152 bytes, spec 3A CHECKIN_ROLLBACK_BOO). Backend trả ROLLBACK_RESP. Processor gọi handle_rollback.
+    /// ROLLBACK – FE gửi req (90 bytes). Backend trả ROLLBACK_RESP (28 bytes). Spec 2.3.1.7.9/2.3.1.7.10 BOO format: 152/84.
     pub const ROLLBACK: i32 = 0x6A;
 
-    /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (84 bytes, spec 3B CHECKIN_ROLLBACK_BOO_RESP).
+    /// ROLLBACK_RESP – Backend trả FE sau khi xử lý ROLLBACK (28 bytes).
     pub const ROLLBACK_RESP: i32 = 0x6B;
 
     /// TERMINATE (0E) – FE gửi req (28 bytes, spec 2.3.1.7.11). Backend trả TERMINATE_RESP.
@@ -122,16 +122,16 @@ pub mod fe {
 
 /// List of valid Front-End command IDs. Used in processor to validate incoming request.
 pub const FE_VALID_COMMANDS: &[i32] = &[
-    fe::CONNECT,         // 0x6C
-    fe::HANDSHAKE,       // 0x1C
-    fe::CHECKIN,         // 0x66
-    fe::COMMIT,          // 0x68
-    fe::ROLLBACK,        // 0x6A
-    fe::TERMINATE,       // 0x70
-    fe::QUERY_VEHICLE_BOO,   // 0x64 (1A)
-    fe::LOOKUP_VEHICLE,      // 0x96
-    fe::CHECKOUT_RESERVE_BOO, // 0x98 (2AZ)
-    fe::CHECKOUT_COMMIT_BOO, // 0x9A (3AZ)
+    fe::CONNECT,               // 0x6C
+    fe::HANDSHAKE,             // 0x1C
+    fe::CHECKIN,               // 0x66
+    fe::COMMIT,                // 0x68
+    fe::ROLLBACK,              // 0x6A
+    fe::TERMINATE,             // 0x70
+    fe::QUERY_VEHICLE_BOO,     // 0x64 (1A)
+    fe::LOOKUP_VEHICLE,        // 0x96
+    fe::CHECKOUT_RESERVE_BOO,  // 0x98 (2AZ)
+    fe::CHECKOUT_COMMIT_BOO,   // 0x9A (3AZ)
     fe::CHECKOUT_ROLLBACK_BOO, // 0x9C (3AZ)
 ];
 
@@ -201,11 +201,11 @@ pub fn get_command_name(cmd_id: i32) -> &'static str {
         fe::TERMINATE_RESP => "FE_TERMINATE_RESP",
         fe::QUERY_VEHICLE_BOO => "FE_QUERY_VEHICLE_BOO",
         fe::QUERY_VEHICLE_BOO_RESP => "FE_QUERY_VEHICLE_BOO_RESP",
-        fe::CHECKOUT_RESERVE_BOO => "FE_CHECKOUT_RESERVE_BOO",       // 2AZ, 0x98
+        fe::CHECKOUT_RESERVE_BOO => "FE_CHECKOUT_RESERVE_BOO", // 2AZ, 0x98
         fe::CHECKOUT_RESERVE_BOO_RESP => "FE_CHECKOUT_RESERVE_BOO_RESP", // 2BZ, 0x99
-        fe::CHECKOUT_COMMIT_BOO => "FE_CHECKOUT_COMMIT_BOO",         // 3AZ, 0x9A
+        fe::CHECKOUT_COMMIT_BOO => "FE_CHECKOUT_COMMIT_BOO",   // 3AZ, 0x9A
         fe::CHECKOUT_COMMIT_BOO_RESP => "FE_CHECKOUT_COMMIT_BOO_RESP", // 3BZ, 0x9B
-        fe::CHECKOUT_ROLLBACK_BOO => "FE_CHECKOUT_ROLLBACK_BOO",     // 3AZ, 0x9C
+        fe::CHECKOUT_ROLLBACK_BOO => "FE_CHECKOUT_ROLLBACK_BOO", // 3AZ, 0x9C
         fe::CHECKOUT_ROLLBACK_BOO_RESP => "FE_CHECKOUT_ROLLBACK_BOO_RESP", // 3BZ, 0x9D
         _ => "UNKNOWN_COMMAND",
     }
@@ -317,6 +317,7 @@ pub mod ticket_id {
 }
 
 /// Retry constants when COMMIT fetches BOO/TRANSPORT record from DB (race with CHECKIN save).
+#[allow(dead_code)]
 pub mod commit_retry {
     /// Number of get_by_id retries (total attempts = MAX_RETRIES + 1).
     pub const MAX_RETRIES: u32 = 3;
@@ -461,52 +462,6 @@ pub mod price_ticket_type {
         pub const WL_ALL: &str = "W_ALL";
         pub const FREE_TURNING: &str = "99";
     }
-}
-
-/// Kafka producer service constants (event types, KeyDB keys, reconnect, batch).
-pub mod kafka_producer {
-    /// Event type for checkin payload to HUB.
-    pub const EVENT_TYPE_CHECKIN: &str = "CHECKIN_INFO";
-    /// Event type for checkout payload to HUB.
-    pub const EVENT_TYPE_CHECKOUT: &str = "CHECKOUT_INFO";
-    /// KeyDB list key for pending checkin when Kafka send fails.
-    pub const KEYDB_LIST_CHECKIN: &str = "kafka_pending:checkin";
-    /// KeyDB list key for pending checkout when Kafka send fails.
-    pub const KEYDB_LIST_CHECKOUT: &str = "kafka_pending:checkout";
-    /// Max list length per KeyDB pending list (trim oldest when exceeded).
-    pub const KEYDB_PENDING_MAX_LIST_LEN: usize = 5_000;
-    /// TTL (seconds) for KeyDB pending list keys (7 days).
-    pub const KEYDB_PENDING_TTL_SECS: u64 = 7 * 24 * 3600;
-    /// Interval (seconds) between replay cycles from KeyDB.
-    pub const KEYDB_REPLAY_INTERVAL_SECS: u64 = 30;
-    /// Max items replayed per list per cycle.
-    pub const KEYDB_REPLAY_MAX_PER_CYCLE: usize = 200;
-    /// LPOP batch size when replaying from KeyDB.
-    pub const KEYDB_REPLAY_LPOP_BATCH: usize = 50;
-    /// Consecutive timeouts before triggering reconnect.
-    pub const RECONNECT_AFTER_CONSECUTIVE_TIMEOUTS: u32 = 3;
-    /// Min gap (seconds) between two reconnect attempts.
-    pub const RECONNECT_DEBOUNCE_SECS: u64 = 10;
-    /// Timeout (seconds) for reconnect (build_client).
-    pub const RECONNECT_TIMEOUT_SECS: u64 = 30;
-    /// Total timeout (seconds) for one batch send (retry + backoff).
-    pub const BATCH_SEND_TOTAL_TIMEOUT_SECS: u64 = 120;
-    /// Cap partitions from metadata to avoid huge produce batches.
-    pub const MAX_PARTITIONS_FROM_METADATA: i32 = 128;
-}
-
-/// Kafka consumer service constants (event type, fetch, poll).
-pub mod kafka_consumer {
-    /// Event type for checkin hub info from HUB.
-    pub const EVENT_TYPE_CHECKIN_HUB_INFO: &str = "CHECKIN_HUB_INFO";
-    /// Fetch min bytes per request.
-    pub const FETCH_MIN_BYTES: i32 = 1;
-    /// Fetch max bytes per request.
-    pub const FETCH_MAX_BYTES: i32 = 1_000_000;
-    /// Max wait (ms) when fetching.
-    pub const FETCH_MAX_WAIT_MS: i32 = 5_000;
-    /// Sleep (ms) between polls when idle.
-    pub const POLL_IDLE_SLEEP_MS: u64 = 500;
 }
 
 /// Epoch (seconds vs milliseconds) threshold for datetime conversion.

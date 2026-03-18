@@ -67,10 +67,7 @@ pub fn init_logging(config: LoggingConfig) -> Result<(), Box<dyn std::error::Err
     };
     let base_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(effective_level));
-    let filter_str = format!(
-        "{},odbc_api=error,odbc_sys=error,rskafka=warn",
-        effective_level
-    );
+    let filter_str = format!("{},odbc_api=error,odbc_sys=error", effective_level);
     let env_filter = EnvFilter::try_new(&filter_str).unwrap_or_else(|_| base_filter.clone());
     let odbc_warning_filter = FilterFn::new(|metadata| {
         if metadata.level() == &Level::WARN {

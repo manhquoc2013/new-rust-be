@@ -111,9 +111,9 @@ public final class FeMessageBuilder {
         return b.array();
     }
 
-    /** LOOKUP_VEHICLE: 110 bytes. version_id 4, request_id 8, session_id 8, timestamp 8, tid 24, etag 24, station 4, lane 4, station_type 1, lane_type 1, general1 8, general2 8 */
+    /** LOOKUP_VEHICLE (1AZ) 2.3.1.7.15: 110 bytes. No station/lane; after etag: station_type 1, lane_type 1, general1 8, general2 16 */
     public static byte[] buildLookupVehicle(long requestId, long sessionId, long timestamp,
-                                             String tid, String etag, int station, int lane,
+                                             String tid, String etag,
                                              String stationType, String laneType, byte[] general1, byte[] general2) {
         ByteBuffer b = ByteBuffer.allocate(FeConstants.LEN_LOOKUP_VEHICLE).order(ByteOrder.LITTLE_ENDIAN);
         b.putInt(FeConstants.LEN_LOOKUP_VEHICLE);
@@ -124,14 +124,12 @@ public final class FeMessageBuilder {
         b.putLong(timestamp);
         b.put(pad(tid != null ? tid : "", 24));
         b.put(pad(etag != null ? etag : "", 24));
-        b.putInt(station);
-        b.putInt(lane);
         b.put(pad(stationType != null && !stationType.isEmpty() ? stationType.substring(0, 1) : "C", 1));
         b.put(pad(laneType != null && !laneType.isEmpty() ? laneType.substring(0, 1) : "I", 1));
         if (general1 != null && general1.length >= 8) b.put(Arrays.copyOf(general1, 8));
         else b.put(new byte[8]);
-        if (general2 != null && general2.length >= 8) b.put(Arrays.copyOf(general2, 8));
-        else b.put(new byte[8]);
+        if (general2 != null && general2.length >= 16) b.put(Arrays.copyOf(general2, 16));
+        else b.put(new byte[16]);
         return b.array();
     }
 

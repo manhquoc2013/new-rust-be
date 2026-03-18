@@ -1,8 +1,8 @@
 //! Handler ROLLBACK: FE gửi ROLLBACK (req), backend trả ROLLBACK_RESP (resp).
 //! Cặp msg req/resp từ FE: FE gửi ROLLBACK (3A, 0x6A) → processor gọi handle_rollback → handler trả ROLLBACK_RESP (3B, 0x6B) cho FE.
 
-mod handler;
 mod common;
+mod handler;
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;

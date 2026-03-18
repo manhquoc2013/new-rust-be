@@ -1,7 +1,7 @@
 //! Handler CHECKIN: FE gửi CHECKIN (req), backend trả CHECKIN_RESP (resp). Phân loại theo eTag, gọi process handler tương ứng.
 
-mod handler;
 pub(crate) mod common;
+mod handler;
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;
@@ -165,13 +165,7 @@ pub async fn handle_checkin(
                 Some(fe::NOT_FOUND_ROUTE_TRANSACTION),
             )
             .await?;
-            return Ok((
-                reply_bytes,
-                status,
-                false,
-                direction,
-                None,
-            ));
+            return Ok((reply_bytes, status, false, direction, None));
         }
         _ => {
             tracing::error!(conn_id, request_id = fe_checkin.request_id, lane_type = %lane_type_str, "[Processor] Invalid lane_type (expected IN/OUT)");
@@ -197,10 +191,7 @@ pub async fn handle_checkin(
     )
     .await;
 
-    tracing::debug!(
-        request_id = fe_checkin.request_id,
-        "[Processor] CHECKIN"
-    );
+    tracing::debug!(request_id = fe_checkin.request_id, "[Processor] CHECKIN");
     handler::process_checkin(
         &fe_checkin,
         conn_id,

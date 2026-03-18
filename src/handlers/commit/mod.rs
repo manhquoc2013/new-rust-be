@@ -1,8 +1,7 @@
 //! Handler COMMIT: cặp msg req/resp từ FE. FE gửi COMMIT (req, 3A/0x68) → processor gọi handle_commit → handler trả COMMIT_RESP (resp, 3B/0x69) cho FE.
 
-mod handler;
 pub(crate) mod common;
-pub(crate) mod kafka_payload;
+mod handler;
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;

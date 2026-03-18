@@ -52,7 +52,8 @@ pub type SessionUpdateSender = tokio::sync::mpsc::UnboundedSender<SessionUpdate>
 #[allow(dead_code)]
 pub type SessionUpdateReceiver = tokio::sync::mpsc::UnboundedReceiver<SessionUpdate>;
 
-/// Message nhận được từ client
+/// Message nhận được từ client (legacy; reader now sends RequestToProcess).
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct IncomingMessage {
     pub conn_id: ConnectionId,
@@ -68,4 +69,14 @@ pub struct ReplyToRoute {
     pub conn_id: ConnectionId,
     pub request_id: i64,
     pub data: Vec<u8>,
+}
+
+/// Request to process: reader sends decrypted payload and context; processor pool runs process_request and sends ReplyToRoute.
+#[derive(Debug)]
+pub struct RequestToProcess {
+    pub conn_id: ConnectionId,
+    pub decrypted: Vec<u8>,
+    pub encryption_key_str: String,
+    pub toll_id: Option<String>,
+    pub client_ip: Option<String>,
 }

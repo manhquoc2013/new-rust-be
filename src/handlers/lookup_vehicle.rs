@@ -34,17 +34,24 @@ fn parse_lookup_vehicle(data: &[u8]) -> Result<LOOKUP_VEHICLE, Box<dyn Error>> {
     req.request_id = i64::from_le_bytes(data[12..20].try_into()?);
     req.session_id = i64::from_le_bytes(data[20..28].try_into()?);
     req.timestamp = i64::from_le_bytes(data[28..36].try_into()?);
-    req.tid = String::from_utf8_lossy(&data[36..60]).trim_end_matches('\0').to_string();
-    req.etag = String::from_utf8_lossy(&data[60..84]).trim_end_matches('\0').to_string();
-    req.station = i32::from_le_bytes(data[84..88].try_into()?);
-    req.lane = i32::from_le_bytes(data[88..92].try_into()?);
-    req.station_type = String::from_utf8_lossy(&data[92..93]).trim_end_matches('\0').to_string();
-    req.lane_type = String::from_utf8_lossy(&data[93..94]).trim_end_matches('\0').to_string();
-    if data.len() >= 102 {
-        req.general1.copy_from_slice(&data[94..102]);
+    req.tid = String::from_utf8_lossy(&data[36..60])
+        .trim_end_matches('\0')
+        .to_string();
+    req.etag = String::from_utf8_lossy(&data[60..84])
+        .trim_end_matches('\0')
+        .to_string();
+    // Spec 2.3.1.7.15: no station/lane; station_type(84..85), lane_type(85..86), general1(86..94), general2(94..110)
+    req.station_type = String::from_utf8_lossy(&data[84..85])
+        .trim_end_matches('\0')
+        .to_string();
+    req.lane_type = String::from_utf8_lossy(&data[85..86])
+        .trim_end_matches('\0')
+        .to_string();
+    if data.len() >= 94 {
+        req.general1.copy_from_slice(&data[86..94]);
     }
     if data.len() >= 110 {
-        req.general2.copy_from_slice(&data[102..110]);
+        req.general2.copy_from_slice(&data[94..110]);
     }
     Ok(req)
 }
@@ -160,7 +167,10 @@ pub async fn handle_lookup_vehicle(
                 "[LookupVehicle] no TRANSPORT_TRANSACTION_STAGE record found"
             );
             resp.status = fe::NOT_FOUND_TOLL_TRANSACTION;
-            (fe::NOT_FOUND_TOLL_TRANSACTION, start.elapsed().as_millis() as i32)
+            (
+                fe::NOT_FOUND_TOLL_TRANSACTION,
+                start.elapsed().as_millis() as i32,
+            )
         }
         Some(stage) => {
             let has_commit = stage
@@ -175,7 +185,10 @@ pub async fn handle_lookup_vehicle(
                     "[LookupVehicle] record has no checkIn_commit_datetime"
                 );
                 resp.status = fe::NOT_FOUND_LANE_TRANSACTION;
-                (fe::NOT_FOUND_LANE_TRANSACTION, start.elapsed().as_millis() as i32)
+                (
+                    fe::NOT_FOUND_LANE_TRANSACTION,
+                    start.elapsed().as_millis() as i32,
+                )
             } else if stage_has_checkout(
                 stage.checkout_toll_id,
                 stage.checkout_datetime.as_ref(),
@@ -188,7 +201,10 @@ pub async fn handle_lookup_vehicle(
                     "[LookupVehicle] record already has checkout info"
                 );
                 resp.status = fe::NOT_FOUND_ROUTE_TRANSACTION;
-                (fe::NOT_FOUND_ROUTE_TRANSACTION, start.elapsed().as_millis() as i32)
+                (
+                    fe::NOT_FOUND_ROUTE_TRANSACTION,
+                    start.elapsed().as_millis() as i32,
+                )
             } else {
                 resp.plate = stage
                     .plate

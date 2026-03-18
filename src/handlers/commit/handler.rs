@@ -1,12 +1,7 @@
 //! Handler COMMIT: cập nhật TRANSPORT_TRANSACTION_STAGE, trả FE COMMIT_RESP (resp).
 //! Chỉ xử lý lane IN (commit check-in). Lane OUT bị từ chối, FE dùng CHECKOUT_COMMIT_BOO.
 
-use super::common::{
-    get_rating_detail_cached, serialize_and_encrypt_commit_response,
-};
-use super::kafka_payload::{
-    build_checkin_payload_from_etdr, send_checkin_to_kafka, CheckinPayloadOverrides,
-};
+use super::common::{get_rating_detail_cached, serialize_and_encrypt_commit_response};
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;
 use crate::constants::{fe, lane_type};
@@ -23,7 +18,7 @@ use crate::models::TollCache::get_toll_lanes_by_toll_id_with_fallback;
 use crate::models::ETDR::{get_latest_checkin_by_etag, save_etdr, ETDR};
 use crate::services::service::Service;
 use crate::services::TransportTransactionStageService;
-use crate::utils::{normalize_etag, now_utc_db_string, timestamp_ms};
+use crate::utils::{now_utc_db_string, timestamp_ms};
 use aes;
 use cbc;
 use r2d2::Pool;
@@ -303,22 +298,8 @@ pub(crate) async fn process_commit(
                         etdr.db_saved = true;
                         save_etdr(etdr.clone());
                         tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated (source of truth, checkin commit)");
-                        let payload = build_checkin_payload_from_etdr(
-                            &etdr,
-                            CheckinPayloadOverrides {
-                                request_id: Some(fe_commit.request_id),
-                                tid: Some(String::new()),
-                                ticket_in_id: Some(found_transport_trans_id),
-                                etag: Some(etag_norm.clone()),
-                                plate: Some(fe_commit.plate.clone()),
-                                station_in: Some(fe_commit.station),
-                                lane_in: Some(fe_commit.lane),
-                                checkin_commit_datetime: Some(now_ms),
-                            },
-                        );
-                        send_checkin_to_kafka(payload);
                     } else {
-                        // Cache miss: lấy từ DB rồi mới cập nhật cache và gửi Kafka
+                        // Cache miss: lấy từ DB rồi cập nhật cache
                         if let Ok(Some(db_record)) =
                             transport_service.get_by_id(found_transport_trans_id).await
                         {
@@ -334,20 +315,6 @@ pub(crate) async fn process_commit(
                             }
                             etdr_from_db.db_saved = true;
                             save_etdr(etdr_from_db.clone());
-                            let payload = build_checkin_payload_from_etdr(
-                                &etdr_from_db,
-                                CheckinPayloadOverrides {
-                                    request_id: Some(fe_commit.request_id),
-                                    tid: Some(String::new()),
-                                    ticket_in_id: Some(found_transport_trans_id),
-                                    etag: Some(etag_norm.clone()),
-                                    plate: Some(fe_commit.plate.clone()),
-                                    station_in: Some(fe_commit.station),
-                                    lane_in: Some(fe_commit.lane),
-                                    ..Default::default()
-                                },
-                            );
-                            send_checkin_to_kafka(payload);
                             tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache filled from DB (cache was miss)");
                         }
                     }
@@ -359,54 +326,26 @@ pub(crate) async fn process_commit(
                         transport_trans_id = found_transport_trans_id,
                         "[COMMIT] update returned false, no rows affected"
                     );
-                    // Vẫn update ETDR cache và gửi Kafka (reuse etdr from single merge fetch).
+                    // Vẫn update ETDR cache (reuse etdr from single merge fetch).
                     if let Some(mut etdr) = etdr_opt.clone() {
                         let now_ms = timestamp_ms();
                         etdr.checkin_commit_datetime = now_ms;
                         etdr.time_route_checkin_commit = now_ms;
                         etdr.time_update = now_ms;
-                        let payload = build_checkin_payload_from_etdr(
-                            &etdr,
-                            CheckinPayloadOverrides {
-                                request_id: Some(fe_commit.request_id),
-                                tid: Some(String::new()),
-                                ticket_in_id: Some(found_transport_trans_id),
-                                etag: Some(etag_norm.clone()),
-                                plate: Some(fe_commit.plate.clone()),
-                                station_in: Some(fe_commit.station),
-                                lane_in: Some(fe_commit.lane),
-                                checkin_commit_datetime: Some(now_ms),
-                            },
-                        );
                         save_etdr(etdr);
                         tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite no rows affected");
-                        send_checkin_to_kafka(payload);
                     }
                 }
                 Err(e) => {
                     tracing::error!(conn_id, request_id = fe_commit.request_id, error = %e, "[COMMIT] TRANSPORT_TRANSACTION_STAGE update failed");
-                    // Vẫn update ETDR cache và gửi Kafka (reuse etdr from single merge fetch).
+                    // Vẫn update ETDR cache (reuse etdr from single merge fetch).
                     if let Some(mut etdr) = etdr_opt.clone() {
                         let now_ms = timestamp_ms();
                         etdr.checkin_commit_datetime = now_ms;
                         etdr.time_route_checkin_commit = now_ms;
                         etdr.time_update = now_ms;
-                        let payload = build_checkin_payload_from_etdr(
-                            &etdr,
-                            CheckinPayloadOverrides {
-                                request_id: Some(fe_commit.request_id),
-                                tid: Some(String::new()),
-                                ticket_in_id: Some(found_transport_trans_id),
-                                etag: Some(etag_norm.clone()),
-                                plate: Some(fe_commit.plate.clone()),
-                                station_in: Some(fe_commit.station),
-                                lane_in: Some(fe_commit.lane),
-                                checkin_commit_datetime: Some(now_ms),
-                            },
-                        );
                         save_etdr(etdr);
                         tracing::debug!(conn_id, request_id = fe_commit.request_id, transport_trans_id = found_transport_trans_id, etag = %etag_norm, "[COMMIT] ETDR cache updated despite DB update failure");
-                        send_checkin_to_kafka(payload);
                     }
                 }
             }
@@ -425,8 +364,7 @@ pub(crate) async fn process_commit(
             fe_resp.request_id = fe_commit.request_id;
             fe_resp.session_id = conn_id as i64;
             fe_resp.status = fe::NOT_FOUND_ROUTE_TRANSACTION;
-            let reply_bytes =
-                serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
+            let reply_bytes = serialize_and_encrypt_commit_response(&fe_resp, encryptor).await?;
             return Ok((reply_bytes, fe_resp.status));
         }
         _ => {

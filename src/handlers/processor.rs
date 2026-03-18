@@ -196,11 +196,7 @@ pub async fn process_request(
     client_ip: Option<String>,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
     if !FE_VALID_COMMANDS.contains(&command_id) {
-        let request_id = if data.len() >= 16 {
-            i64::from_le_bytes(data[8..16].try_into().unwrap())
-        } else {
-            0
-        };
+        let request_id = fe_protocol::request_id_from_decrypted(&data, command_id);
         let session_id = if data.len() >= 24 {
             i64::from_le_bytes(data[16..24].try_into().unwrap())
         } else {
@@ -290,7 +286,12 @@ pub async fn process_request(
         );
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            format!("FE request too short: {} bytes (min {} for command 0x{:02X})", data.len(), min_len, command_id),
+            format!(
+                "FE request too short: {} bytes (min {} for command 0x{:02X})",
+                data.len(),
+                min_len,
+                command_id
+            ),
         )));
     }
 
@@ -309,6 +310,20 @@ pub async fn process_request(
                 return Err(Box::new(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "FE SHAKE message too short for header ids (need 28 bytes)",
+                )));
+            }
+        }
+    } else if command_id == fe::CONNECT {
+        let r = fe_protocol::request_id_from_decrypted(&data, command_id);
+        (r, 0)
+    } else if command_id == fe::TERMINATE {
+        match fe_protocol::parse_terminate_ids(&data) {
+            Some((_, r, s)) => (r, s),
+            None => {
+                tracing::error!(conn_id, data_len = data.len(), command_id = %format!("0x{:02X}", command_id), "[Processor] parse TERMINATE ids failed");
+                return Err(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "FE TERMINATE message too short for header ids (need 28 bytes)",
                 )));
             }
         }
@@ -797,13 +812,8 @@ pub async fn process_request(
                 request_id = ctx.request_id,
                 "[Processor] CHECKOUT_ROLLBACK_BOO"
             );
-            let (response, status) = handle_checkout_rollback_boo(
-                fe_request,
-                &data,
-                conn_id,
-                encryption_key,
-            )
-            .await?;
+            let (response, status) =
+                handle_checkout_rollback_boo(fe_request, &data, conn_id, encryption_key).await?;
             let response_send_ms = crate::utils::timestamp_ms();
             let ids = crate::utils::log_trace_ids(
                 ctx.request_id,

@@ -1,6 +1,6 @@
 [package]
 name = "Rust-core-transaction"
-version = "0.2.5"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
@@ -30,8 +30,6 @@ socket2 = { version = "0.5", features = ["all"] }
 nix = { version = "0.27", features = ["net"] }
 libc = "0.2"
 uuid = { version = "1", features = ["v4", "serde"] }
-rskafka = "0.6"
-rsasl = { version = "2.2.1", default-features = false, features = ["config_builder", "scram-sha-1", "scram-sha-2", "anonymous", "external", "oauthbearer", "xoauth2", "plain", "login"] }
 parking_lot = "0.12"
 get_if_addrs = "0.5"
 dashmap = "6"

@@ -72,7 +72,11 @@ pub fn parse_checkout_reserve_boo(data: &[u8]) -> Result<CHECKOUT_RESERVE_BOO, B
             let base = detail_start + i * RATING_DETAIL_ITEM_BYTES;
             let mut rd = RatingDetail::default();
             let price_id_val = i64::from_le_bytes(data[base..base + 8].try_into()?);
-            rd.price_id = if price_id_val != 0 { Some(price_id_val) } else { None };
+            rd.price_id = if price_id_val != 0 {
+                Some(price_id_val)
+            } else {
+                None
+            };
             rd.boo = i32::from_le_bytes(data[base + 8..base + 12].try_into()?);
             rd.toll_a_id = i32::from_le_bytes(data[base + 12..base + 16].try_into()?);
             rd.toll_b_id = i32::from_le_bytes(data[base + 16..base + 20].try_into()?);
@@ -92,15 +96,21 @@ pub fn parse_checkout_reserve_boo(data: &[u8]) -> Result<CHECKOUT_RESERVE_BOO, B
             let bot_val = i64::from_le_bytes(data[base + 58..base + 66].try_into()?);
             rd.bot_id = if bot_val != 0 { Some(bot_val) } else { None };
             let stage_val = i64::from_le_bytes(data[base + 66..base + 74].try_into()?);
-            rd.stage_id = if stage_val != 0 { Some(stage_val) } else { None };
+            rd.stage_id = if stage_val != 0 {
+                Some(stage_val)
+            } else {
+                None
+            };
             req.rating_detail.push(rd);
         }
     }
 
     let trailer_start = detail_end;
     if data.len() >= trailer_start + TRAILER_BYTES {
-        req.general1.copy_from_slice(&data[trailer_start..trailer_start + 8]);
-        req.general2.copy_from_slice(&data[trailer_start + 8..trailer_start + TRAILER_BYTES]);
+        req.general1
+            .copy_from_slice(&data[trailer_start..trailer_start + 8]);
+        req.general2
+            .copy_from_slice(&data[trailer_start + 8..trailer_start + TRAILER_BYTES]);
     }
     Ok(req)
 }

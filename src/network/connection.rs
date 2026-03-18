@@ -2,13 +2,12 @@
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::config::Config;
-use crate::constants::fe;
 use crate::crypto::{create_decryptor_with_key, Aes128CbcDec, BlockDecryptMut, Pkcs7};
-use crate::handlers::connect::build_connect_error_response;
-use crate::handlers::processor::process_request;
+use crate::fe_protocol;
 use crate::services::TcocConnectionServerService;
 use crate::types::{
-    ConnectionId, ConnectionMap, EncryptionKeyMap, IncomingMessage, SessionMap, SessionUpdateSender,
+    ConnectionId, ConnectionMap, EncryptionKeyMap, ReplyToRoute, RequestToProcess, SessionMap,
+    SessionUpdateSender,
 };
 use bytes::BytesMut;
 use std::error::Error;
@@ -18,7 +17,6 @@ use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Semaphore;
 
 use super::client_ip::get_real_client_ip;
 use super::terminate::{self as term};
@@ -41,7 +39,8 @@ pub async fn handle_connection(
     conn_id: ConnectionId,
     mut socket: TcpStream,
     peer_addr: std::net::SocketAddr,
-    tx_client_requests: Sender<IncomingMessage>,
+    tx_request_to_process: Sender<RequestToProcess>,
+    tx_logic_replies: Sender<ReplyToRoute>,
     mut rx_socket_write: Receiver<Vec<u8>>,
     cache: Arc<CacheManager>,
     tx_session_updates: SessionUpdateSender,
@@ -49,7 +48,6 @@ pub async fn handle_connection(
     session_map: SessionMap,
     active_conns: ConnectionMap,
     peer_disconnected: Arc<AtomicBool>,
-    reply_in_flight: Option<Arc<Semaphore>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let client_ip = get_real_client_ip(&socket, peer_addr);
     tracing::debug!(conn_id, client_ip = %client_ip, "[Network] handling connection");
@@ -157,12 +155,12 @@ pub async fn handle_connection(
     );
 
     let pending_command: Arc<Mutex<Option<i32>>> = Arc::new(Mutex::new(None));
+    let mut reply_received = true;
 
-    // Vòng chính: đọc (có thể append vào buf còn sót từ pre-auth), ghi reply, xử lý Ping/encrypted.
+    // Main loop: read (reader), write reply (reply writer), one request in flight per connection.
     loop {
-        // Process any data already in buf so that first message need not be ping (pre-auth leaves non-ping data in buf).
-        if buf.len() >= 4
-            && !process_message_buffer(
+        if buf.len() >= 4 {
+            match process_message_buffer(
                 &mut buf,
                 &candidate_keys,
                 &resolved_decryptor,
@@ -170,17 +168,21 @@ pub async fn handle_connection(
                 &toll_id,
                 &ip_str,
                 &pending_command,
-                &tx_client_requests,
+                &tx_request_to_process,
+                &tx_logic_replies,
                 &tx_session_updates,
                 &cache,
                 &session_map,
                 &encryption_keys,
                 &active_conns,
-                reply_in_flight.as_ref(),
+                &mut reply_received,
             )
             .await
-        {
-            break;
+            {
+                None => break,
+                Some(true) => reply_received = false,
+                Some(false) => {}
+            }
         }
 
         tokio::select! {
@@ -192,23 +194,28 @@ pub async fn handle_connection(
                         break;
                     }
                     Ok(_) => {
-                        if !process_message_buffer(
-                            &mut buf,
-                            &candidate_keys,
-                            &resolved_decryptor,
-                            conn_id,
-                            &toll_id,
-                            &ip_str,
-                            &pending_command,
-                            &tx_client_requests,
-                            &tx_session_updates,
-                            &cache,
-                            &session_map,
-                            &encryption_keys,
-                            &active_conns,
-                            reply_in_flight.as_ref(),
-                        ).await {
-                            break;
+                        if buf.len() >= 4 {
+                            match process_message_buffer(
+                                &mut buf,
+                                &candidate_keys,
+                                &resolved_decryptor,
+                                conn_id,
+                                &toll_id,
+                                &ip_str,
+                                &pending_command,
+                                &tx_request_to_process,
+                                &tx_logic_replies,
+                                &tx_session_updates,
+                                &cache,
+                                &session_map,
+                                &encryption_keys,
+                                &active_conns,
+                                &mut reply_received,
+                            ).await {
+                                None => break,
+                                Some(true) => reply_received = false,
+                                Some(false) => {}
+                            }
                         }
                     }
                     Err(e) => {
@@ -248,6 +255,7 @@ pub async fn handle_connection(
                     log_write_error(conn_id, "flush", e);
                     break;
                 }
+                reply_received = true;
 
                 let should_close = {
                     let pending = pending_command.lock().unwrap();
@@ -501,6 +509,7 @@ fn is_plain_ping(buf: &[u8]) -> bool {
         && (buf[3] == b'g' || buf[3] == b'G')
 }
 
+/// Processes one message from buf if present. Returns None to break connection, Some(true) when a request was sent (caller sets reply_received = false), Some(false) when nothing consumed or waiting for reply.
 #[allow(clippy::too_many_arguments)]
 async fn process_message_buffer(
     buf: &mut BytesMut,
@@ -510,14 +519,15 @@ async fn process_message_buffer(
     toll_id: &Option<String>,
     ip_str: &str,
     pending_command: &Arc<Mutex<Option<i32>>>,
-    tx_client_requests: &Sender<IncomingMessage>,
-    tx_session_updates: &SessionUpdateSender,
-    cache: &Arc<CacheManager>,
+    tx_request_to_process: &Sender<RequestToProcess>,
+    _tx_logic_replies: &Sender<ReplyToRoute>,
+    _tx_session_updates: &SessionUpdateSender,
+    _cache: &Arc<CacheManager>,
     session_map: &SessionMap,
     encryption_keys: &EncryptionKeyMap,
     active_conns: &ConnectionMap,
-    reply_in_flight: Option<&Arc<Semaphore>>,
-) -> bool {
+    reply_received: &mut bool,
+) -> Option<bool> {
     let mut consecutive_errors = 0;
 
     loop {
@@ -536,7 +546,7 @@ async fn process_message_buffer(
             };
             if let Some(tx) = tx {
                 if tx.send(net_consts::PONG_RESPONSE.to_vec()).await.is_err() {
-                    return false;
+                    return None;
                 }
             }
             tracing::debug!(conn_id, "[Network] plain Ping -> pong");
@@ -559,7 +569,7 @@ async fn process_message_buffer(
                     term::status::ERROR_INVALID_MESSAGE,
                 );
                 buf.clear();
-                return false;
+                return None;
             }
         };
 
@@ -585,13 +595,17 @@ async fn process_message_buffer(
                     term::status::ERROR_INVALID_MESSAGE,
                 );
                 buf.clear();
-                return false;
+                return None;
             }
             continue;
         }
 
         if buf.len() < total_message_length {
             break;
+        }
+
+        if !*reply_received {
+            return Some(false);
         }
 
         let message_data = buf.split_to(total_message_length).freeze().to_vec();
@@ -616,7 +630,7 @@ async fn process_message_buffer(
                     term::status::ERROR_INVALID_MESSAGE,
                 );
                 buf.clear();
-                return false;
+                return None;
             }
             continue;
         }
@@ -716,11 +730,7 @@ async fn process_message_buffer(
                 }
             };
 
-        let request_id = if decrypted.len() >= 16 {
-            i64::from_le_bytes(decrypted[8..16].try_into().unwrap())
-        } else {
-            0
-        };
+        let request_id = fe_protocol::request_id_from_decrypted(&decrypted, command_id);
 
         tracing::debug!(
             conn_id,
@@ -735,93 +745,20 @@ async fn process_message_buffer(
             *pending = Some(command_id);
         }
 
-        // Back-pressure: acquire permit before process_request so we never overfill the reply channel.
-        let _permit = if let Some(sem) = reply_in_flight {
-            Some(
-                sem.clone()
-                    .acquire_owned()
-                    .await
-                    .expect("reply_in_flight semaphore closed"),
-            )
-        } else {
-            None
-        };
-
-        let (reply_bytes, send_connect_err) = match process_request(
-            decrypted.clone(),
+        let req = RequestToProcess {
             conn_id,
-            command_id,
-            cache.clone(),
-            toll_id.clone(),
-            tx_session_updates.clone(),
-            &encryption_key_str,
-            Some(ip_str.to_string()),
-        )
-        .await
-        {
-            Ok(rb) => (Some(rb), None),
-            Err(e) => {
-                log_process_request_error(conn_id, e);
-                {
-                    let mut pending = pending_command.lock().unwrap();
-                    *pending = None;
-                }
-                let err_resp = (command_id == fe::CONNECT && decrypted.len() >= 20)
-                    .then(|| {
-                        let version_id = i32::from_le_bytes(decrypted[8..12].try_into().unwrap_or([0; 4]));
-                        let req_id = i64::from_le_bytes(decrypted[12..20].try_into().unwrap_or([0; 8]));
-                        build_connect_error_response(
-                            &encryption_key_str,
-                            version_id,
-                            req_id,
-                            fe::ERROR_REASON_SYSTEM,
-                        )
-                        .ok()
-                    })
-                    .flatten();
-                (None, err_resp)
-            }
+            decrypted,
+            encryption_key_str: encryption_key_str.clone(),
+            toll_id: toll_id.clone(),
+            client_ip: Some(ip_str.to_string()),
         };
-
-        if let Some(err_resp) = send_connect_err {
-            if tx_client_requests
-                .send(IncomingMessage {
-                    conn_id,
-                    command_id: fe::CONNECT_RESP,
-                    request_id,
-                    data: err_resp,
-                })
-                .await
-                .is_err()
-            {
-                return false;
-            }
+        if tx_request_to_process.send(req).await.is_err() {
+            return None;
         }
-
-        let Some(reply_bytes) = reply_bytes else {
-            continue;
-        };
-
-        if tx_client_requests
-            .send(IncomingMessage {
-                conn_id,
-                command_id,
-                request_id,
-                data: reply_bytes,
-            })
-            .await
-            .is_err()
-        {
-            return false;
-        }
+        return Some(true);
     }
 
-    true
-}
-
-/// Log process_request error and drop it (so the async task stays Send).
-fn log_process_request_error(conn_id: ConnectionId, e: Box<dyn std::error::Error>) {
-    tracing::error!(conn_id, error = %e, "[Network] process_request failed");
+    Some(false)
 }
 
 fn log_write_error(conn_id: ConnectionId, op: &str, e: std::io::Error) {

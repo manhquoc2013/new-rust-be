@@ -104,13 +104,8 @@ pub fn send_terminate_resp_on_close(
             }
         };
 
-        let reply_bytes = match create_terminate_resp_bytes(
-            session_id,
-            &encryption_key,
-            0,
-            status_code,
-            0,
-        ) {
+        let reply_bytes =
+            match create_terminate_resp_bytes(session_id, &encryption_key, 0, status_code, 0) {
                 Some(rb) => rb,
                 None => {
                     tracing::debug!(conn_id, "[Network] failed to create TERMINATE_RESP");

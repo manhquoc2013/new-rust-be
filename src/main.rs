@@ -1,4 +1,4 @@
-//! ETC Transaction Middleware entry point: TCP server, logic handler, Kafka, cache, logging.
+//! ETC Transaction Middleware entry point: TCP server, logic handler, cache, logging.
 
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::field_reassign_with_default)]
@@ -46,7 +46,6 @@ use crate::cache::data::toll_fee_list_cache::get_toll_fee_list_cache;
 use crate::cache::data::toll_lane_cache::get_toll_lane_cache;
 use crate::configs::config::*;
 use crate::configs::crm_db::CRM_DB;
-use crate::configs::kafka::KafkaConfig;
 use crate::configs::mediation_db::MEDIATION_DB;
 use crate::configs::pool_factory::create_pool;
 use crate::configs::rating_db::RATING_DB;
@@ -54,18 +53,13 @@ use crate::logging::{
     get_logging_config_from_env, init_logging, set_process_type, start_log_cleanup_task,
     CleanupConfig, ProcessType,
 };
-use crate::logic::run_logic_handler;
+use crate::logic::run_request_processor;
 use crate::models::ETDR::{
     flush_unsaved_etdrs_to_keydb, set_keydb_for_etdr_sync, start_cache_cleanup_task,
     start_etdr_db_retry_task,
 };
 use crate::network::{run_connection_router, run_tcp_server};
-use crate::services::kafka_consumer_service::run_checkin_hub_consumer;
-use crate::services::kafka_producer_service::{
-    drain_pending_into_producer, init_pending_queue, KafkaProducerService, PendingKafkaQueue,
-    KAFKA_PRODUCER,
-};
-use crate::types::{ConnectionId, ConnectionMap, IncomingMessage};
+use crate::types::{ConnectionId, ConnectionMap, RequestToProcess};
 use once_cell::sync::Lazy;
 use std::error::Error;
 use std::io::Write;
@@ -91,89 +85,6 @@ async fn wait_for_shutdown_signal() -> Result<(), Box<dyn Error>> {
 #[cfg(not(unix))]
 async fn wait_for_shutdown_signal() -> Result<(), Box<dyn Error>> {
     tokio::signal::ctrl_c().await.map_err(|e| e.into())
-}
-
-/// Initialize Kafka producer in background: retry with timeout; on success set KAFKA_PRODUCER and drain pending queue to producer.
-/// keydb: when Some, failed batch sends are cached to KeyDB and replayed when online.
-async fn kafka_init_background(
-    config: KafkaConfig,
-    init_timeout_secs: u64,
-    retry_interval_secs: u64,
-    pending_queue: Arc<PendingKafkaQueue>,
-    keydb: Option<Arc<KeyDB>>,
-) {
-    let topic_trans_hub_online = config.topic_trans_hub_online.clone();
-    let queue_capacity = config.queue_capacity;
-    loop {
-        let network_ok =
-            KafkaProducerService::verify_kafka_brokers(&config.bootstrap_servers, 3).await;
-
-        if !network_ok {
-            tracing::error!(
-                retry_secs = retry_interval_secs,
-                "[Kafka] init failed: brokers unreachable (network issue, not auth); retry in retry_secs"
-            );
-            tokio::time::sleep(Duration::from_secs(retry_interval_secs)).await;
-            continue;
-        }
-
-        let init_future = KafkaProducerService::new_async(config.clone(), keydb.clone());
-        match tokio::time::timeout(Duration::from_secs(init_timeout_secs), init_future).await {
-            Ok(Ok(svc)) => {
-                if KAFKA_PRODUCER.set(Some(Arc::clone(&svc))).is_err() {
-                    tracing::warn!("[Kafka] producer already set (duplicate init ignored)");
-                } else {
-                    tracing::info!(
-                        topic_trans_hub_online = %topic_trans_hub_online,
-                        queue_capacity,
-                        "[Kafka] producer ready"
-                    );
-                    drain_pending_into_producer(Arc::clone(&pending_queue), svc);
-                }
-                return;
-            }
-            Ok(Err(e)) => {
-                let error_msg = e.to_string().to_lowercase();
-                let is_auth_error = error_msg.contains("authentication")
-                    || error_msg.contains("auth")
-                    || error_msg.contains("unauthorized")
-                    || error_msg.contains("invalid credentials")
-                    || error_msg.contains("invalid username")
-                    || error_msg.contains("invalid password");
-
-                if is_auth_error {
-                    tracing::error!(
-                        retry_secs = retry_interval_secs,
-                        error = %e,
-                        "[Kafka] init failed: auth error (network OK); check KAFKA_USERNAME/KAFKA_PASSWORD; retry in retry_secs"
-                    );
-                } else {
-                    tracing::warn!(
-                        retry_secs = retry_interval_secs,
-                        error = %e,
-                        "[Kafka] init failed (network OK); retry in retry_secs"
-                    );
-                }
-            }
-            Err(_) => {
-                let has_auth = config.username.is_some() && config.password.is_some();
-                if has_auth {
-                    tracing::error!(
-                        init_timeout_secs,
-                        retry_secs = retry_interval_secs,
-                        "[Kafka] init timeout (network OK); likely invalid credentials; check KAFKA_USERNAME/KAFKA_PASSWORD; retry in retry_secs"
-                    );
-                } else {
-                    tracing::warn!(
-                        init_timeout_secs,
-                        retry_secs = retry_interval_secs,
-                        "[Kafka] init timeout (network OK); retry in retry_secs"
-                    );
-                }
-            }
-        }
-        tokio::time::sleep(Duration::from_secs(retry_interval_secs)).await;
-    }
 }
 
 #[tokio::main]
@@ -538,50 +449,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         "[STARTUP] ETDR retry task started"
     );
 
-    let kafka_config = KafkaConfig::from_env();
-    if kafka_config.enabled {
-        let kafka_init_timeout_secs = std::env::var("KAFKA_INIT_TIMEOUT_SECS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(15);
-        let kafka_retry_interval_secs = std::env::var("KAFKA_INIT_RETRY_INTERVAL_SECS")
-            .ok()
-            .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(10);
-        let pending_queue = init_pending_queue(kafka_config.queue_capacity.max(1));
-        let kafka_config_producer = kafka_config.clone();
-        let keydb_for_kafka = Some(cache.keydb());
-        tokio::spawn(async move {
-            kafka_init_background(
-                kafka_config_producer,
-                kafka_init_timeout_secs,
-                kafka_retry_interval_secs,
-                pending_queue,
-                keydb_for_kafka,
-            )
-            .await
-        });
-        tracing::info!("[STARTUP] Kafka init in background (events queued until connected)");
-
-        if kafka_config.consumer_enabled {
-            let consumer_config = kafka_config.clone();
-            let offset_file = std::env::var("KAFKA_CONSUMER_OFFSET_FILE")
-                .ok()
-                .map(std::path::PathBuf::from);
-            let keydb_for_consumer = Some(cache.keydb());
-            tokio::spawn(async move {
-                run_checkin_hub_consumer(consumer_config, offset_file, keydb_for_consumer).await;
-            });
-            tracing::info!(
-                topic = %kafka_config.topic_checkin_hub_online,
-                "[STARTUP] Kafka consumer started (CHECKIN_HUB_INFO, HA leader lock via KeyDB)"
-            );
-        }
-    } else {
-        let _ = KAFKA_PRODUCER.set(None);
-        tracing::info!("[STARTUP] Kafka disabled (set KAFKA_BOOTSTRAP_SERVERS to enable)");
-    }
-
     let reply_in_flight_limit = crate::configs::config::Config::get().reply_in_flight_limit;
     let channel_cap = if reply_in_flight_limit > 0 {
         reply_in_flight_limit
@@ -589,9 +456,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         256
     };
 
-    let (tx_client_requests, rx_client_requests): (
-        mpsc::Sender<IncomingMessage>,
-        mpsc::Receiver<IncomingMessage>,
+    let (tx_request_to_process, rx_request_to_process): (
+        mpsc::Sender<RequestToProcess>,
+        mpsc::Receiver<RequestToProcess>,
     ) = mpsc::channel(channel_cap);
 
     let (tx_logic_replies, rx_logic_replies): (
@@ -605,23 +472,30 @@ async fn main() -> Result<(), Box<dyn Error>> {
         None
     };
 
+    let (tx_session_updates, rx_session_updates) =
+        tokio::sync::mpsc::unbounded_channel::<crate::types::SessionUpdate>();
     let (tx_conn_closed, rx_conn_closed) = tokio::sync::mpsc::unbounded_channel::<ConnectionId>();
 
     let active_conns: ConnectionMap =
         std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
 
     let server_active_conns = active_conns.clone();
-    let server_tx_requests = tx_client_requests.clone();
+    let server_tx_requests = tx_request_to_process.clone();
+    let server_tx_replies = tx_logic_replies.clone();
     let server_cache = cache.clone();
+    let server_tx_session = tx_session_updates.clone();
+    let server_rx_session = rx_session_updates;
 
     tokio::spawn(async move {
         set_process_type(ProcessType::Local);
         if let Err(e) = run_tcp_server(
             server_active_conns,
             server_tx_requests,
+            server_tx_replies,
             server_cache,
-            reply_in_flight,
             tx_conn_closed,
+            server_tx_session,
+            server_rx_session,
         )
         .await
         {
@@ -635,9 +509,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         run_connection_router(rx_logic_replies, rx_conn_closed, router_active_conns).await;
     });
 
+    let processor_cache = cache.clone();
     tokio::spawn(async move {
         set_process_type(ProcessType::Local);
-        run_logic_handler(rx_client_requests, tx_logic_replies).await;
+        run_request_processor(
+            rx_request_to_process,
+            tx_logic_replies,
+            processor_cache,
+            tx_session_updates,
+            reply_in_flight,
+        )
+        .await;
     });
 
     tracing::info!("[STARTUP] server running (Ctrl+C or SIGTERM to stop)");

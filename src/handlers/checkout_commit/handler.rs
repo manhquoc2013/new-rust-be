@@ -1,4 +1,4 @@
-//! BECT checkout commit logic: validate stage, update ACCOUNT_TRANSACTION and TRANSPORT_TRANSACTION_STAGE, send Kafka, clear ETDR.
+//! BECT checkout commit logic: validate stage, update ACCOUNT_TRANSACTION and TRANSPORT_TRANSACTION_STAGE, clear ETDR.
 
 use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::pool_factory::OdbcConnectionManager;
@@ -9,21 +9,22 @@ use crate::db::repositories::{
     allow_commit_or_rollback, get_account_transaction_for_commit,
     update_account_transaction_commit_status,
 };
-use crate::handlers::checkin::common::{get_best_pending_from_sync_or_main_bect, merge_latest_checkin_etdr};
-use crate::handlers::commit::common::invalidate_tcd_rating_cache;
-use crate::handlers::commit::kafka_payload::{
-    build_checkout_payload_from_etdr, send_checkout_to_kafka, CheckoutPayloadOverrides,
+use crate::handlers::checkin::common::{
+    get_best_pending_from_sync_or_main_bect, merge_latest_checkin_etdr,
 };
+use crate::handlers::commit::common::invalidate_tcd_rating_cache;
 use crate::models::bect_messages::CHECKOUT_COMMIT_BOO;
-use crate::models::ETDR::{clear_etdr_after_transaction_complete, get_etdr_cache, get_latest_checkin_by_etag};
-use crate::services::TransportTransactionStageService;
+use crate::models::ETDR::{
+    clear_etdr_after_transaction_complete, get_etdr_cache, get_latest_checkin_by_etag,
+};
 use crate::services::service::Service;
-use crate::utils::{now_utc_db_string, normalize_etag, timestamp_ms};
+use crate::services::TransportTransactionStageService;
+use crate::utils::{normalize_etag, now_utc_db_string};
 use r2d2::Pool;
 use std::error::Error;
 use std::sync::Arc;
 
-/// Runs BECT checkout commit: resolve ETDR/stage, update account and stage, send checkout to Kafka, clear ETDR. Returns status for CHECKOUT_COMMIT_BOO_RESP.
+/// Runs BECT checkout commit: resolve ETDR/stage, update account and stage, clear ETDR. Returns status for CHECKOUT_COMMIT_BOO_RESP.
 pub async fn process_checkout_commit_bect(
     req: &CHECKOUT_COMMIT_BOO,
     _conn_id: i32,
@@ -73,7 +74,6 @@ pub async fn process_checkout_commit_bect(
     };
 
     let now = now_utc_db_string();
-    let now_ms = timestamp_ms();
 
     if let Some(account_trans_id) = stage.account_trans_id {
         if account_trans_id > 0 {
@@ -126,13 +126,6 @@ pub async fn process_checkout_commit_bect(
             Some(0),
         )
         .await;
-
-    let overrides = CheckoutPayloadOverrides {
-        checkout_commit_datetime: Some(now_ms),
-        ..Default::default()
-    };
-    let payload = build_checkout_payload_from_etdr(&etdr, overrides);
-    send_checkout_to_kafka(payload);
 
     clear_etdr_after_transaction_complete(&etag_norm, Some(transport_trans_id)).await;
     invalidate_tcd_rating_cache(cache.as_ref(), transport_trans_id, true).await;

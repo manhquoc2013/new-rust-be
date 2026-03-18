@@ -15,28 +15,28 @@ use crate::models::rating_detail::RatingDetail;
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKIN_RESERVE_BOO {
-    pub message_length: i32,   // 4 – 172
-    pub command_id: i32,      // 4 – 102
-    pub version_id: i32,      // 4
-    pub request_id: i64,      // 8
-    pub session_id: i64,      // 8
-    pub timestamp: i64,       // 8 – epoch ms
-    pub ticket_id_in: i64,    // 8 – BOOA unique transaction ID
-    pub tid: String,          // 24 – TID
-    pub etag: String,         // 24 – EPC/ETAG (spec: eTag)
-    pub station: i32,         // 4
-    pub lane: i32,            // 4
-    pub station_type: String, // 1 – C: closed, O: open
-    pub lane_type: String,    // 1 – I: in, O: out; null for open
-    pub vehicle_type: i32,    // 4
-    pub ticket_type: String,  // 1 – L, T, Q, N
-    pub price_ticket_type: i32, // 4 – discount ticket ID
+    pub message_length: i32,     // 4 – 172
+    pub command_id: i32,         // 4 – 102
+    pub version_id: i32,         // 4
+    pub request_id: i64,         // 8
+    pub session_id: i64,         // 8
+    pub timestamp: i64,          // 8 – epoch ms
+    pub ticket_id_in: i64,       // 8 – BOOA unique transaction ID
+    pub tid: String,             // 24 – TID
+    pub etag: String,            // 24 – EPC/ETAG (spec: eTag)
+    pub station: i32,            // 4
+    pub lane: i32,               // 4
+    pub station_type: String,    // 1 – C: closed, O: open
+    pub lane_type: String,       // 1 – I: in, O: out; null for open
+    pub vehicle_type: i32,       // 4
+    pub ticket_type: String,     // 1 – L, T, Q, N
+    pub price_ticket_type: i32,  // 4 – discount ticket ID
     pub subscription_id: String, // 25 – subscription ID(s), comma-separated
-    pub trans_amount: i32,    // 4
+    pub trans_amount: i32,       // 4
     /// Epoch datetime in **seconds** (per spec).
-    pub trans_datetime: i64,  // 8
-    pub general1: [u8; 8],   // 8
-    pub general2: [u8; 16],  // 16
+    pub trans_datetime: i64, // 8
+    pub general1: [u8; 8],       // 8
+    pub general2: [u8; 16],      // 16
 }
 
 impl fmt::Debug for CHECKIN_RESERVE_BOO {
@@ -58,7 +58,10 @@ impl fmt::Debug for CHECKIN_RESERVE_BOO {
             .field("vehicle_type", &self.vehicle_type)
             .field("ticket_type", &self.ticket_type.trim_end_matches('\0'))
             .field("price_ticket_type", &self.price_ticket_type)
-            .field("subscription_id", &self.subscription_id.trim_end_matches('\0'))
+            .field(
+                "subscription_id",
+                &self.subscription_id.trim_end_matches('\0'),
+            )
             .field("trans_amount", &self.trans_amount)
             .field("trans_datetime", &self.trans_datetime)
             .field("general1", &format_args!("{:?}", &self.general1))
@@ -80,8 +83,8 @@ pub struct CHECKIN_RESERVE_BOO_RESP {
     pub request_id: i64,     // 8
     pub session_id: i64,     // 8
     pub timestamp: i64,      // 8 – epoch ms
-    pub process_time: i32,  // 4 – ms
-    pub ref_trans_id: i64,    // 8 – BOOB unique transaction ID
+    pub process_time: i32,   // 4 – ms
+    pub ref_trans_id: i64,   // 8 – BOOB unique transaction ID
     pub status: i32,         // 4 – 0: success, other: failure
     pub general1: [u8; 8],   // 8
     pub general2: [u8; 16],  // 16
@@ -112,20 +115,20 @@ impl fmt::Debug for CHECKIN_RESERVE_BOO_RESP {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct QUERY_VEHICLE_BOO {
-    pub message_length: i32,   // 4 – 122
-    pub command_id: i32,       // 4 – 100
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when sending
-    pub tid: String,           // 24 – TID
-    pub etag: String,          // 24 – EPC/ETAG
-    pub station: i32,          // 4
-    pub lane: i32,             // 4
-    pub station_type: String,  // 1 – C: closed, O: open
-    pub lane_type: String,     // 1 – I: in, O: out; null for open station
-    pub min_balance: i32,      // 4 – required minimum balance, 0 = no requirement
-    pub general1: [u8; 8],     // 8
+    pub message_length: i32,  // 4 – 122
+    pub command_id: i32,      // 4 – 100
+    pub version_id: i32,      // 4
+    pub request_id: i64,      // 8
+    pub session_id: i64,      // 8
+    pub timestamp: i64,       // 8 – epoch ms when sending
+    pub tid: String,          // 24 – TID
+    pub etag: String,         // 24 – EPC/ETAG
+    pub station: i32,         // 4
+    pub lane: i32,            // 4
+    pub station_type: String, // 1 – C: closed, O: open
+    pub lane_type: String,    // 1 – I: in, O: out; null for open station
+    pub min_balance: i32,     // 4 – required minimum balance, 0 = no requirement
+    pub general1: [u8; 8],    // 8
     pub general2: [u8; 16],   // 16
 }
 
@@ -192,7 +195,10 @@ impl fmt::Debug for QUERY_VEHICLE_BOO_RESP {
             .field("etag", &self.etag.trim_end_matches('\0'))
             .field("vehicle_type", &self.vehicle_type)
             .field("ticket_type", &self.ticket_type.trim_end_matches('\0'))
-            .field("register_vehicle_type", &self.register_vehicle_type.trim_end_matches('\0'))
+            .field(
+                "register_vehicle_type",
+                &self.register_vehicle_type.trim_end_matches('\0'),
+            )
             .field("seat", &self.seat)
             .field("weight_goods", &self.weight_goods)
             .field("weight_all", &self.weight_all)
@@ -205,25 +211,24 @@ impl fmt::Debug for QUERY_VEHICLE_BOO_RESP {
     }
 }
 
-// ============== LOOKUP_VEHICLE (0x96, 110 bytes) ==============
+// ============== LOOKUP_VEHICLE (1AZ, 0x96, 110 bytes) ==============
 
-/// LOOKUP_VEHICLE – FE sends to Back-End to lookup vehicle by etag. Command ID: 150 (0x96). Size: 110 bytes.
+/// LOOKUP_VEHICLE (1AZ) – FE sends to Back-End to lookup vehicle by etag. Command ID: 150 (0x96). Size: 110 bytes. Spec 2.3.1.7.15.
+/// Layout: no station/lane; after eTag come station_type(1), lane_type(1), general1(8), general2(16).
 #[derive(Default)]
 pub struct LOOKUP_VEHICLE {
-    pub message_length: i32,   // 4 – 110
-    pub command_id: i32,       // 4 – 0x96
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms
-    pub tid: String,           // 24 – TID
-    pub etag: String,          // 24 – EPC/ETAG
-    pub station: i32,          // 4
-    pub lane: i32,             // 4
-    pub station_type: String,  // 1 – C: closed, O: open
+    pub message_length: i32,  // 4 – 110
+    pub command_id: i32,      // 4 – 0x96
+    pub version_id: i32,      // 4
+    pub request_id: i64,      // 8
+    pub session_id: i64,      // 8
+    pub timestamp: i64,       // 8 – epoch ms
+    pub tid: String,          // 24 – TID
+    pub etag: String,         // 24 – EPC/ETAG
+    pub station_type: String, // 1 – C: closed, O: open
     pub lane_type: String,     // 1 – I: in, O: out
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 8],     // 8
+    pub general1: [u8; 8],    // 8
+    pub general2: [u8; 16],   // 16 – spec 2.3.1.7.15
 }
 
 impl fmt::Debug for LOOKUP_VEHICLE {
@@ -237,8 +242,6 @@ impl fmt::Debug for LOOKUP_VEHICLE {
             .field("timestamp", &self.timestamp)
             .field("tid", &self.tid.trim_end_matches('\0'))
             .field("etag", &self.etag.trim_end_matches('\0'))
-            .field("station", &self.station)
-            .field("lane", &self.lane)
             .field("station_type", &self.station_type.trim_end_matches('\0'))
             .field("lane_type", &self.lane_type.trim_end_matches('\0'))
             .field("general1", &format_args!("{:?}", &self.general1))
@@ -314,7 +317,10 @@ impl fmt::Debug for LOOKUP_VEHICLE_RESP {
             .field("etag", &self.etag.trim_end_matches('\0'))
             .field("vehicle_type", &self.vehicle_type)
             .field("ticket_type", &self.ticket_type.trim_end_matches('\0'))
-            .field("register_vehicle_type", &self.register_vehicle_type.trim_end_matches('\0'))
+            .field(
+                "register_vehicle_type",
+                &self.register_vehicle_type.trim_end_matches('\0'),
+            )
             .field("seat", &self.seat)
             .field("weight_goods", &self.weight_goods)
             .field("weight_all", &self.weight_all)
@@ -334,24 +340,24 @@ impl fmt::Debug for LOOKUP_VEHICLE_RESP {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKIN_COMMIT_BOO {
-    pub message_length: i32,   // 4 – 152
-    pub command_id: i32,       // 4 – 104
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when sending
-    pub ticket_id: i64,        // 8 – BOOA transaction ID
-    pub ref_trans_id: i64,     // 8 – BOOB unique transaction ID
-    pub tid: String,           // 24 – TID
-    pub etag: String,          // 24 – EPC/ETAG
-    pub station: i32,          // 4
-    pub station_type: String,  // 1 – C: closed, O: open
-    pub lane_type: String,     // 1 – I: in, O: out; null for open station
-    pub lane: i32,             // 4
+    pub message_length: i32,     // 4 – 152
+    pub command_id: i32,         // 4 – 104
+    pub version_id: i32,         // 4
+    pub request_id: i64,         // 8
+    pub session_id: i64,         // 8
+    pub timestamp: i64,          // 8 – epoch ms when sending
+    pub ticket_id: i64,          // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,       // 8 – BOOB unique transaction ID
+    pub tid: String,             // 24 – TID
+    pub etag: String,            // 24 – EPC/ETAG
+    pub station: i32,            // 4
+    pub station_type: String,    // 1 – C: closed, O: open
+    pub lane_type: String,       // 1 – I: in, O: out; null for open station
+    pub lane: i32,               // 4
     pub plate_from_toll: String, // 10 – recognized plate
-    pub commit_datetime: i64,   // 8 – epoch ms
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 16],   // 16
+    pub commit_datetime: i64,    // 8 – epoch ms
+    pub general1: [u8; 8],       // 8
+    pub general2: [u8; 16],      // 16
 }
 
 impl fmt::Debug for CHECKIN_COMMIT_BOO {
@@ -371,7 +377,10 @@ impl fmt::Debug for CHECKIN_COMMIT_BOO {
             .field("station_type", &self.station_type.trim_end_matches('\0'))
             .field("lane_type", &self.lane_type.trim_end_matches('\0'))
             .field("lane", &self.lane)
-            .field("plate_from_toll", &self.plate_from_toll.trim_end_matches('\0'))
+            .field(
+                "plate_from_toll",
+                &self.plate_from_toll.trim_end_matches('\0'),
+            )
             .field("commit_datetime", &self.commit_datetime)
             .field("general1", &format_args!("{:?}", &self.general1))
             .field("general2", &format_args!("{:?}", &self.general2))
@@ -391,17 +400,17 @@ pub type CHECKIN_COMMIT_BOO_RESP = COMMIT_BOO_RESP;
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct COMMIT_BOO_RESP {
-    pub message_length: i32,  // 4 – 84
-    pub command_id: i32,      // 4 – 105
-    pub version_id: i32,      // 4
-    pub request_id: i64,      // 8
-    pub session_id: i64,      // 8
-    pub timestamp: i64,       // 8 – epoch ms when responding
-    pub process_time: i32,    // 4 – millisecond
-    pub ticket_id: i64,       // 8 – BOOA transaction ID
-    pub ref_trans_id: i64,    // 8 – BOOB unique transaction ID
-    pub status: i32,          // 4 – 0: success
-    pub general1: [u8; 8],    // 8
+    pub message_length: i32, // 4 – 84
+    pub command_id: i32,     // 4 – 105
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when responding
+    pub process_time: i32,   // 4 – millisecond
+    pub ticket_id: i64,      // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,   // 8 – BOOB unique transaction ID
+    pub status: i32,         // 4 – 0: success
+    pub general1: [u8; 8],   // 8
     pub general2: [u8; 16],  // 16
 }
 
@@ -431,24 +440,24 @@ impl fmt::Debug for COMMIT_BOO_RESP {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKIN_ROLLBACK_BOO {
-    pub message_length: i32,   // 4 – 152
-    pub command_id: i32,       // 4 – 106
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when sending
-    pub ticket_id: i64,        // 8 – BOOA transaction ID
-    pub ref_trans_id: i64,     // 8 – BOOB unique transaction ID
-    pub tid: String,           // 24 – TID
-    pub etag: String,          // 24 – EPC/ETAG
-    pub station: i32,          // 4
-    pub station_type: String,  // 1 – C: closed, O: open
-    pub lane_type: String,     // 1 – I: in, O: out; null for open station
-    pub lane: i32,             // 4
+    pub message_length: i32,     // 4 – 152
+    pub command_id: i32,         // 4 – 106
+    pub version_id: i32,         // 4
+    pub request_id: i64,         // 8
+    pub session_id: i64,         // 8
+    pub timestamp: i64,          // 8 – epoch ms when sending
+    pub ticket_id: i64,          // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,       // 8 – BOOB unique transaction ID
+    pub tid: String,             // 24 – TID
+    pub etag: String,            // 24 – EPC/ETAG
+    pub station: i32,            // 4
+    pub station_type: String,    // 1 – C: closed, O: open
+    pub lane_type: String,       // 1 – I: in, O: out; null for open station
+    pub lane: i32,               // 4
     pub plate_from_toll: String, // 10 – recognized plate
-    pub commit_datetime: i64,   // 8 – epoch ms
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 16],   // 16
+    pub commit_datetime: i64,    // 8 – epoch ms
+    pub general1: [u8; 8],       // 8
+    pub general2: [u8; 16],      // 16
 }
 
 impl fmt::Debug for CHECKIN_ROLLBACK_BOO {
@@ -468,7 +477,10 @@ impl fmt::Debug for CHECKIN_ROLLBACK_BOO {
             .field("station_type", &self.station_type.trim_end_matches('\0'))
             .field("lane_type", &self.lane_type.trim_end_matches('\0'))
             .field("lane", &self.lane)
-            .field("plate_from_toll", &self.plate_from_toll.trim_end_matches('\0'))
+            .field(
+                "plate_from_toll",
+                &self.plate_from_toll.trim_end_matches('\0'),
+            )
             .field("commit_datetime", &self.commit_datetime)
             .field("general1", &format_args!("{:?}", &self.general1))
             .field("general2", &format_args!("{:?}", &self.general2))
@@ -488,17 +500,17 @@ pub type CHECKIN_ROLLBACK_BOO_RESP = ROLLBACK_BOO_RESP;
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct ROLLBACK_BOO_RESP {
-    pub message_length: i32,  // 4 – 84
-    pub command_id: i32,      // 4 – 107
-    pub version_id: i32,      // 4
-    pub request_id: i64,      // 8
-    pub session_id: i64,      // 8
-    pub timestamp: i64,       // 8 – epoch ms when responding
-    pub process_time: i32,    // 4 – millisecond
-    pub ticket_id: i64,       // 8 – BOOA transaction ID
-    pub ref_trans_id: i64,    // 8 – BOOB unique transaction ID
-    pub status: i32,          // 4 – 0: success
-    pub general1: [u8; 8],    // 8
+    pub message_length: i32, // 4 – 84
+    pub command_id: i32,     // 4 – 107
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when responding
+    pub process_time: i32,   // 4 – millisecond
+    pub ticket_id: i64,      // 8 – BOOA transaction ID
+    pub ref_trans_id: i64,   // 8 – BOOB unique transaction ID
+    pub status: i32,         // 4 – 0: success
+    pub general1: [u8; 8],   // 8
     pub general2: [u8; 16],  // 16
 }
 
@@ -642,28 +654,28 @@ impl fmt::Debug for CHECKOUT_RESERVE_BOO_RESP {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_COMMIT_BOO {
-    pub message_length: i32,   // 4 – 188
-    pub command_id: i32,       // 4 – 154
-    pub version_id: i32,        // 4
-    pub request_id: i64,        // 8
-    pub session_id: i64,        // 8
-    pub timestamp: i64,         // 8 – epoch ms when sending
-    pub tid: String,            // 24 – TID
-    pub etag: String,           // 24 – EPC/ETAG
-    pub ticket_in_id: i64,      // 8 – entry station transaction ID
-    pub hub_id: i64,            // 8 – hub sync ID
-    pub ticket_out_id: i64,     // 8 – exit station transaction ID
-    pub ticket_eTag_id: i64,    // 8 – BOO card transaction ID
-    pub station_in: i32,        // 4 – entry station
-    pub lane_in: i32,           // 4 – entry lane
-    pub station_out: i32,       // 4 – exit station
-    pub lane_out: i32,          // 4 – exit lane
-    pub plate: String,          // 20 – plate number
-    pub trans_amount: i32,      // 4 – amount to deduct
+    pub message_length: i32, // 4 – 188
+    pub command_id: i32,     // 4 – 154
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when sending
+    pub tid: String,         // 24 – TID
+    pub etag: String,        // 24 – EPC/ETAG
+    pub ticket_in_id: i64,   // 8 – entry station transaction ID
+    pub hub_id: i64,         // 8 – hub sync ID
+    pub ticket_out_id: i64,  // 8 – exit station transaction ID
+    pub ticket_eTag_id: i64, // 8 – BOO card transaction ID
+    pub station_in: i32,     // 4 – entry station
+    pub lane_in: i32,        // 4 – entry lane
+    pub station_out: i32,    // 4 – exit station
+    pub lane_out: i32,       // 4 – exit lane
+    pub plate: String,       // 20 – plate number
+    pub trans_amount: i32,   // 4 – amount to deduct
     /// Epoch datetime in seconds (per spec).
-    pub trans_datetime: i64,    // 8
-    pub general1: [u8; 8],      // 8
-    pub general2: [u8; 16],     // 16
+    pub trans_datetime: i64, // 8
+    pub general1: [u8; 8],   // 8
+    pub general2: [u8; 16],  // 16
 }
 
 impl fmt::Debug for CHECKOUT_COMMIT_BOO {
@@ -701,19 +713,19 @@ impl fmt::Debug for CHECKOUT_COMMIT_BOO {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_COMMIT_BOO_RESP {
-    pub message_length: i32,  // 4 – 96
-    pub command_id: i32,      // 4 – 155
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when responding
-    pub ticket_in_id: i64,     // 8
-    pub hub_id: i64,          // 8
-    pub ticket_eTag_id: i64,   // 8
-    pub ticket_out_id: i64,    // 8
-    pub status: i32,           // 4 – 0: success
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 16],    // 16
+    pub message_length: i32, // 4 – 96
+    pub command_id: i32,     // 4 – 155
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when responding
+    pub ticket_in_id: i64,   // 8
+    pub hub_id: i64,         // 8
+    pub ticket_eTag_id: i64, // 8
+    pub ticket_out_id: i64,  // 8
+    pub status: i32,         // 4 – 0: success
+    pub general1: [u8; 8],   // 8
+    pub general2: [u8; 16],  // 16
 }
 
 impl fmt::Debug for CHECKOUT_COMMIT_BOO_RESP {
@@ -743,27 +755,27 @@ impl fmt::Debug for CHECKOUT_COMMIT_BOO_RESP {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_ROLLBACK_BOO {
-    pub message_length: i32,   // 4 – 178
-    pub command_id: i32,       // 4 – 156
-    pub version_id: i32,        // 4
-    pub request_id: i64,        // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when sending
-    pub tid: String,           // 24 – TID
-    pub etag: String,          // 24 – EPC/ETAG
-    pub ticket_in_id: i64,     // 8 – entry station transaction ID
-    pub hub_id: i64,           // 8 – hub sync ID
-    pub ticket_out_id: i64,    // 8 – exit station transaction ID
-    pub ticket_eTag_id: i64,   // 8 – BOO card transaction ID
-    pub station_in: i32,       // 4 – entry station
-    pub lane_in: i32,          // 4 – entry lane
-    pub station_out: i32,      // 4 – exit station
-    pub lane_out: i32,         // 4 – exit lane
-    pub plate: String,         // 10 – plate number
-    pub trans_amount: i32,     // 4 – amount to deduct
-    pub trans_datetime: i64,   // 8 – epoch datetime in seconds
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 16],   // 16
+    pub message_length: i32, // 4 – 178
+    pub command_id: i32,     // 4 – 156
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when sending
+    pub tid: String,         // 24 – TID
+    pub etag: String,        // 24 – EPC/ETAG
+    pub ticket_in_id: i64,   // 8 – entry station transaction ID
+    pub hub_id: i64,         // 8 – hub sync ID
+    pub ticket_out_id: i64,  // 8 – exit station transaction ID
+    pub ticket_eTag_id: i64, // 8 – BOO card transaction ID
+    pub station_in: i32,     // 4 – entry station
+    pub lane_in: i32,        // 4 – entry lane
+    pub station_out: i32,    // 4 – exit station
+    pub lane_out: i32,       // 4 – exit lane
+    pub plate: String,       // 10 – plate number
+    pub trans_amount: i32,   // 4 – amount to deduct
+    pub trans_datetime: i64, // 8 – epoch datetime in seconds
+    pub general1: [u8; 8],   // 8
+    pub general2: [u8; 16],  // 16
 }
 
 impl fmt::Debug for CHECKOUT_ROLLBACK_BOO {
@@ -801,19 +813,19 @@ impl fmt::Debug for CHECKOUT_ROLLBACK_BOO {
 #[allow(dead_code)]
 #[derive(Default)]
 pub struct CHECKOUT_ROLLBACK_BOO_RESP {
-    pub message_length: i32,  // 4 – 96
-    pub command_id: i32,      // 4 – 157
-    pub version_id: i32,       // 4
-    pub request_id: i64,       // 8
-    pub session_id: i64,       // 8
-    pub timestamp: i64,        // 8 – epoch ms when responding
-    pub ticket_in_id: i64,     // 8
-    pub hub_id: i64,          // 8
-    pub ticket_eTag_id: i64,   // 8
-    pub ticket_out_id: i64,    // 8
-    pub status: i32,           // 4 – 0: success
-    pub general1: [u8; 8],     // 8
-    pub general2: [u8; 16],   // 16
+    pub message_length: i32, // 4 – 96
+    pub command_id: i32,     // 4 – 157
+    pub version_id: i32,     // 4
+    pub request_id: i64,     // 8
+    pub session_id: i64,     // 8
+    pub timestamp: i64,      // 8 – epoch ms when responding
+    pub ticket_in_id: i64,   // 8
+    pub hub_id: i64,         // 8
+    pub ticket_eTag_id: i64, // 8
+    pub ticket_out_id: i64,  // 8
+    pub status: i32,         // 4 – 0: success
+    pub general1: [u8; 8],   // 8
+    pub general2: [u8; 16],  // 16
 }
 
 impl fmt::Debug for CHECKOUT_ROLLBACK_BOO_RESP {

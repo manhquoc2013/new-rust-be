@@ -4,7 +4,8 @@ use crate::cache::config::cache_manager::CacheManager;
 use crate::configs::config::Config;
 use crate::services::ip_block_service::IpBlockService;
 use crate::types::{
-    ConnectionId, ConnectionMap, EncryptionKeyMap, IncomingMessage, SessionMap, SessionUpdate,
+    ConnectionId, ConnectionMap, EncryptionKeyMap, ReplyToRoute, RequestToProcess, SessionMap,
+    SessionUpdate, SessionUpdateReceiver, SessionUpdateSender,
 };
 use crate::utils::CompiledIpDenylist;
 use std::error::Error;
@@ -15,21 +16,22 @@ use std::sync::{
 use std::time::Duration;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc::{Sender, UnboundedSender};
-use tokio::sync::Semaphore;
 
-use crate::constants::terminate as term_status;
 use super::client_ip::get_real_client_ip;
 use super::connection::{handle_connection, send_plain_error_then_close};
 use super::session::{spawn_session_idle_cleanup, spawn_session_update_processor};
 use super::terminate;
+use crate::constants::terminate as term_status;
 
 /// Chạy TCP server, chấp nhận nhiều kết nối.
 pub async fn run_tcp_server(
     active_conns: ConnectionMap,
-    tx_client_requests: Sender<IncomingMessage>,
+    tx_request_to_process: Sender<RequestToProcess>,
+    tx_logic_replies: Sender<ReplyToRoute>,
     cache: Arc<CacheManager>,
-    reply_in_flight: Option<Arc<Semaphore>>,
     tx_conn_closed: UnboundedSender<ConnectionId>,
+    tx_session_updates: SessionUpdateSender,
+    rx_session_updates: SessionUpdateReceiver,
 ) -> Result<(), Box<dyn Error>> {
     let cfg = Config::get();
     let listener = TcpListener::bind(format!("0.0.0.0:{}", cfg.port_listen)).await?;
@@ -37,7 +39,6 @@ pub async fn run_tcp_server(
 
     let session_map: SessionMap =
         Arc::new(std::sync::RwLock::new(std::collections::HashMap::new()));
-    let (tx_session_updates, rx_session_updates) = tokio::sync::mpsc::unbounded_channel();
     spawn_session_update_processor(rx_session_updates, session_map.clone());
 
     type CloseSignalMap =
@@ -107,7 +108,8 @@ pub async fn run_tcp_server(
             conns.insert(conn_id, tx_socket_write);
         }
 
-        let tx_requests_clone = tx_client_requests.clone();
+        let tx_request_to_process_clone = tx_request_to_process.clone();
+        let tx_logic_replies_clone = tx_logic_replies.clone();
         let active_conns_clone = active_conns.clone();
         let cache_clone = cache.clone();
         let tx_session_updates_clone = tx_session_updates.clone();
@@ -117,7 +119,6 @@ pub async fn run_tcp_server(
         let handshake_timeout_for_conn = handshake_timeout;
         let session_map_for_handshake = session_map.clone();
         let peer_disconnected = Arc::new(AtomicBool::new(false));
-        let reply_in_flight_for_conn = reply_in_flight.clone();
         let tx_conn_closed_for_conn = tx_conn_closed.clone();
 
         let addr_clone = addr;
@@ -213,7 +214,8 @@ pub async fn run_tcp_server(
                     conn_id,
                     socket,
                     addr_clone,
-                    tx_requests_clone,
+                    tx_request_to_process_clone,
+                    tx_logic_replies_clone,
                     rx_socket_write,
                     cache_clone,
                     tx_session_updates_clone.clone(),
@@ -221,7 +223,6 @@ pub async fn run_tcp_server(
                     session_map_for_handshake.clone(),
                     active_conns_clone.clone(),
                     peer_disconnected.clone(),
-                    reply_in_flight_for_conn,
                 ) => {
                     if let Some(handle) = handshake_timeout_handle {
                         handle.abort();

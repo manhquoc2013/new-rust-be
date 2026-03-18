@@ -8,10 +8,10 @@ use crate::configs::pool_factory::OdbcConnectionManager;
 use crate::configs::rating_db::RATING_DB;
 use crate::constants::{bect, fe};
 use crate::db::repositories::account_repository::get_account_for_charge;
+use crate::db::repositories::TransportTransStageTcd;
 use crate::db::repositories::{
     insert_account_transaction_for_bect_checkout, InsertAccountTransactionParams,
 };
-use crate::db::repositories::TransportTransStageTcd;
 use crate::handlers::checkin::common::{
     get_best_pending_from_sync_or_main_bect, get_price_ticket_type_from_rating_detail,
     merge_latest_checkin_etdr, price_ticket_type_for_etdr_from_rating_details,
@@ -49,7 +49,11 @@ pub async fn process_checkout_reserve_bect(
                 || etdr.checkout_commit_datetime != 0
                 || etdr.checkin_datetime == 0
             {
-                return Ok((fe::NOT_FOUND_ROUTE_TRANSACTION, etdr.ticket_id, etdr.ticket_id));
+                return Ok((
+                    fe::NOT_FOUND_ROUTE_TRANSACTION,
+                    etdr.ticket_id,
+                    etdr.ticket_id,
+                ));
             }
 
             let etag_str = normalize_etag(&req.etag);
@@ -59,8 +63,7 @@ pub async fn process_checkout_reserve_bect(
             );
 
             let trans_datetime = if etdr.checkout_datetime > 0 {
-                crate::utils::epoch_to_datetime_utc(etdr.checkout_datetime)
-                    .map(|dt| dt.naive_utc())
+                crate::utils::epoch_to_datetime_utc(etdr.checkout_datetime).map(|dt| dt.naive_utc())
             } else {
                 Some(chrono::Utc::now().naive_utc())
             };
@@ -211,10 +214,11 @@ pub async fn process_checkout_reserve_bect(
                 )
                 .await;
 
-            let checkin_datetime_str = match crate::utils::epoch_to_datetime_utc(etdr.checkin_datetime) {
-                Some(dt) => Some(crate::utils::format_datetime_utc_db(&dt)),
-                None => Some(crate::utils::now_utc_db_string()),
-            };
+            let checkin_datetime_str =
+                match crate::utils::epoch_to_datetime_utc(etdr.checkin_datetime) {
+                    Some(dt) => Some(crate::utils::format_datetime_utc_db(&dt)),
+                    None => Some(crate::utils::now_utc_db_string()),
+                };
 
             if !rating_details_for_db.is_empty() {
                 let tcd_records: Vec<TransportTransStageTcd> = rating_details_for_db
@@ -272,7 +276,9 @@ pub async fn process_checkout_reserve_bect(
                     stage_id: None,
                     price_id: None,
                     ticket_type: Some(ticket_type_i32_to_str(etdr.ticket_type)),
-                    price_ticket_type: get_price_ticket_type_from_rating_detail(etdr.price_ticket_type),
+                    price_ticket_type: get_price_ticket_type_from_rating_detail(
+                        etdr.price_ticket_type,
+                    ),
                     price_amount: Some(trans_amount as i64),
                     subscription_id: None,
                     vehicle_type: Some(etdr.vehicle_type.parse::<i64>().unwrap_or(1)),
@@ -286,19 +292,16 @@ pub async fn process_checkout_reserve_bect(
                 .await
                 .is_err()
                 {
-                    set_pending_tcd_bect(
-                        transport_trans_id,
-                        std::slice::from_ref(&tcd_record),
-                    )
-                    .await;
+                    set_pending_tcd_bect(transport_trans_id, std::slice::from_ref(&tcd_record))
+                        .await;
                 }
             }
 
             if error_status != 0 {
                 return Ok((error_status, etdr.ticket_id, etdr.ticket_id));
             }
-            return Ok((0, etdr.ticket_id, etdr.ticket_id));
+            Ok((0, etdr.ticket_id, etdr.ticket_id))
         }
-        None => return Ok((fe::NOT_FOUND_ROUTE_TRANSACTION, 0, 0)),
+        None => Ok((fe::NOT_FOUND_ROUTE_TRANSACTION, 0, 0)),
     }
 }

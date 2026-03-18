@@ -60,7 +60,7 @@ pub mod len {
     pub const ROLLBACK: usize = 90;
     /// QUERY_VEHICLE_BOO (1A) 2.3.1.7.13: 4+4+4+8+8+8+24+24+4+4+1+1+4+8+16 = 122
     pub const QUERY_VEHICLE_BOO: usize = 122;
-    /// LOOKUP_VEHICLE (0x96): 4+4+4+8+8+8+24+24+4+4+1+1+8+8 = 110
+    /// LOOKUP_VEHICLE (1AZ) 2.3.1.7.15: 4+4+4+8+8+8+24+24+1+1+8+16 = 110 (no station/lane; general2 16)
     pub const LOOKUP_VEHICLE: usize = 110;
     /// CHECKOUT_RESERVE_BOO (2AZ) minimum: fixed header through rating_detail_line + general1 + general2 (no rating_detail items) = 203
     pub const CHECKOUT_RESERVE_BOO_MIN: usize = 203;
@@ -101,6 +101,24 @@ pub fn parse_terminate_ids(data: &[u8]) -> Option<(i32, i64, i64)> {
     let request_id = i64::from_le_bytes(data[12..20].try_into().ok()?);
     let session_id = i64::from_le_bytes(data[20..28].try_into().ok()?);
     Some((version_id, request_id, session_id))
+}
+
+/// Request_id offset depends on command: CONNECT/HANDSHAKE/TERMINATE have version_id 8..12 then request_id 12..20; others have request_id 8..16.
+pub fn request_id_from_decrypted(data: &[u8], command_id: i32) -> i64 {
+    if data.len() < 8 {
+        return 0;
+    }
+    if command_id == fe::CONNECT || command_id == fe::HANDSHAKE || command_id == fe::TERMINATE {
+        if data.len() >= 20 {
+            return i64::from_le_bytes(data[12..20].try_into().unwrap_or([0; 8]));
+        }
+        return 0;
+    }
+    if data.len() >= 16 {
+        i64::from_le_bytes(data[8..16].try_into().unwrap_or([0; 8]))
+    } else {
+        0
+    }
 }
 
 /// Parse request_id and session_id after first 8 bytes (message_length, command_id).
@@ -195,9 +213,9 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             plate: (0, 0),
         },
         fe::LOOKUP_VEHICLE => FeBodyOffsets {
-            toll: (84, 88),
+            toll: (0, 0), // spec 2.3.1.7.15: no station/lane in request
             etag: (60, 84),
-            lane: (88, 92),
+            lane: (0, 0),
             plate: (0, 0),
         },
         fe::COMMIT | fe::ROLLBACK => FeBodyOffsets {
@@ -207,22 +225,22 @@ pub fn fe_body_offsets(command_id: i32) -> FeBodyOffsets {
             plate: (68, 78),
         },
         fe::CHECKOUT_RESERVE_BOO => FeBodyOffsets {
-            toll: (140, 144),   // station_out
+            toll: (140, 144), // station_out
             etag: (60, 84),
-            lane: (144, 148),  // lane_out
+            lane: (144, 148), // lane_out
             plate: (148, 158),
         },
         fe::CHECKOUT_COMMIT_BOO => FeBodyOffsets {
-            toll: (124, 128),   // station_out
+            toll: (124, 128), // station_out
             etag: (60, 84),
-            lane: (128, 132),   // lane_out
+            lane: (128, 132),  // lane_out
             plate: (132, 152), // plate 20 bytes
         },
         fe::CHECKOUT_ROLLBACK_BOO => FeBodyOffsets {
-            toll: (124, 128),   // station_out
+            toll: (124, 128), // station_out
             etag: (60, 84),
-            lane: (128, 132),   // lane_out
-            plate: (132, 142),  // plate 10 bytes
+            lane: (128, 132),  // lane_out
+            plate: (132, 142), // plate 10 bytes
         },
         _ => FeBodyOffsets {
             toll: (48, 52),
@@ -269,7 +287,8 @@ pub async fn write_fe_ticket_id<W: AsyncWriteExt + Unpin>(
     Ok(())
 }
 
-/// Message length for header+status only (COMMIT_RESP, ROLLBACK_RESP): 28 bytes. TERMINATE_RESP (0F) 2.3.1.7.12 uses `TERMINATE_RESP_LEN` (32). SHAKE_RESP uses `SHAKE_RESP_LEN` (32).
+/// Message length for header+status only (COMMIT_RESP, ROLLBACK_RESP): 28 bytes. Spec: msg_len(0..4), command_id(4..8), request_id(8..16), session_id(16..24), status(24..28).
+/// TERMINATE_RESP (0F) 2.3.1.7.12 uses `TERMINATE_RESP_LEN` (32). SHAKE_RESP uses `SHAKE_RESP_LEN` (32).
 pub fn response_header_status_len() -> i32 {
     28
 }

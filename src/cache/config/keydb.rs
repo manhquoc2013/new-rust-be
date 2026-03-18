@@ -327,6 +327,7 @@ impl KeyDB {
     }
 
     /// Ghi đè key và set TTL (giây). Used to renew leader lock.
+    #[allow(dead_code)]
     pub async fn set_ex(&self, key: &str, value: &str, ttl_secs: u64) -> redis::RedisResult<()> {
         let slot = self.slot();
         let mut guard = slot.write().await;
@@ -565,6 +566,7 @@ impl KeyDB {
 
     /// RPUSH nhiều phần tử trong một lệnh + LTRIM + EXPIRE. Tối ưu round-trip khi persist batch.
     /// values rỗng thì không gọi Redis. max_len/ttl_secs giống rpush_trim_ttl.
+    #[allow(dead_code)]
     pub async fn rpush_many_trim_ttl(
         &self,
         key: &str,
@@ -615,6 +617,7 @@ impl KeyDB {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn lpop_n(&self, key: &str, n: usize) -> redis::RedisResult<Vec<String>> {
         if n == 0 {
             return Ok(Vec::new());

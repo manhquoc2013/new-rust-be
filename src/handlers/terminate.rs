@@ -55,7 +55,9 @@ pub async fn handle_terminate(
 
     let (version_id, req_id, sess_id) = match fe_protocol::parse_terminate_ids(&decrypted) {
         Some(p) => p,
-        None => return Err("TERMINATE message too short for version_id/request_id/session_id".into()),
+        None => {
+            return Err("TERMINATE message too short for version_id/request_id/session_id".into())
+        }
     };
     let mut fe_terminate: FE_TERMINATE = FE_TERMINATE::default();
     fe_terminate.message_length = rq.message_length;
@@ -75,7 +77,7 @@ pub async fn handle_terminate(
     fe_resp.command_id = fe::TERMINATE_RESP;
     fe_resp.version_id = fe_terminate.version_id;
     fe_resp.request_id = fe_terminate.request_id;
-    fe_resp.session_id = conn_id as i64;
+    fe_resp.session_id = fe_terminate.session_id;
     fe_resp.status = 0;
 
     tracing::debug!(

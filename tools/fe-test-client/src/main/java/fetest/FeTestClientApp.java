@@ -5,6 +5,8 @@ import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
@@ -75,6 +77,7 @@ public class FeTestClientApp extends JFrame {
     private final JButton sendButton = new JButton("Gửi (1 request / eTag đã chọn)");
     private final JButton connectButton = new JButton("Kết nối");
     private final JButton disconnectButton = new JButton("Ngắt");
+    private final JButton testTcpButton = new JButton("Test TCP");
 
     private final JTextArea statusResponseArea = new JTextArea(12, 60);
     private final JLabel sendStatusLabel = new JLabel(" ");
@@ -155,6 +158,8 @@ public class FeTestClientApp extends JFrame {
         connectButton.addActionListener(e -> doConnect());
         disconnectButton.addActionListener(e -> disconnect(true));
         disconnectButton.setEnabled(false);
+        testTcpButton.addActionListener(e -> doTestTcp());
+        testTcpButton.setToolTipText("Chỉ test kết nối TCP tới IP:Port (không gửi FE). Nếu OK nhưng Kết nối vẫn lỗi thì do giao thức/encryption.");
         row1.add(connectButton);
         row1.add(disconnectButton);
         p.add(row1, BorderLayout.NORTH);
@@ -164,6 +169,7 @@ public class FeTestClientApp extends JFrame {
         row2.add(hostField);
         row2.add(new JLabel("Port:"));
         row2.add(portField);
+        row2.add(testTcpButton);
         row2.add(new JLabel("User:"));
         row2.add(userField);
         row2.add(new JLabel("Pass:"));
@@ -473,7 +479,7 @@ public class FeTestClientApp extends JFrame {
             protected void done() {
                 if (err != null) {
                     String msg = isTimeoutOrEmpty(err) ? "Timeout 5s: server không trả bản tin. Đã ngắt kết nối." : err;
-                    appendStatus("Kết nối / CONNECT thất bại: " + msg);
+                    appendStatus("Kết nối / CONNECT thất bại: " + msg + " (đã thử " + hostFinal + ":" + portFinal + ")");
                     connectButton.setEnabled(true);
                     disconnectButton.setEnabled(false);
                     return;
@@ -507,6 +513,47 @@ public class FeTestClientApp extends JFrame {
             }
         };
         worker.execute();
+    }
+
+    /** Chỉ test TCP tới host:port (không gửi FE). Giúp phân biệt lỗi do firewall/Java vs do server. */
+    private void doTestTcp() {
+        String host = hostField.getText().trim();
+        String portStr = portField.getText().trim();
+        int port;
+        try {
+            port = Integer.parseInt(portStr);
+        } catch (NumberFormatException e) {
+            appendStatus("Test TCP: Port không hợp lệ.");
+            return;
+        }
+        final String h = host;
+        final int pt = port;
+        testTcpButton.setEnabled(false);
+        appendStatus("Test TCP " + h + ":" + pt + " ...");
+        SwingWorker<String, Void> w = new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                try (Socket s = new Socket()) {
+                    s.connect(new InetSocketAddress(h, pt), FeClient.CONNECT_AND_READ_TIMEOUT_MS);
+                    return null; // success
+                } catch (Exception e) {
+                    return e.getMessage() != null ? e.getMessage() : e.toString();
+                }
+            }
+            @Override
+            protected void done() {
+                testTcpButton.setEnabled(true);
+                try {
+                    String err = get();
+                    if (err == null) {
+                        appendStatus("Test TCP " + h + ":" + pt + " OK. Java kết nối được. Nếu Kết nối vẫn lỗi thì do giao thức/encryption key.");
+                    } else {
+                        appendStatus("Test TCP " + h + ":" + pt + " thất bại: " + err + " → Kiểm tra firewall/AV cho Java, hoặc server không listen port này.");
+                    }
+                } catch (Exception ignored) { }
+            }
+        };
+        w.execute();
     }
 
     /** Chỉ đóng socket và clear client, không đổi nút / không ghi trạng thái (dùng trong worker). */
@@ -786,7 +833,7 @@ public class FeTestClientApp extends JFrame {
             case CMD_ROLLBACK:
                 return FeMessageBuilder.buildRollback(reqId, sessionId, etag, station, lane, ticketId, status, plate, 0, 0, 0);
             case CMD_LOOKUP_VEHICLE:
-                return FeMessageBuilder.buildLookupVehicle(reqId, sessionId, System.currentTimeMillis(), tid, etag, station, lane, "C", "I", null, null);
+                return FeMessageBuilder.buildLookupVehicle(reqId, sessionId, System.currentTimeMillis(), tid, etag, "C", "I", null, null);
             case CMD_QUERY_VEHICLE_BOO:
                 return FeMessageBuilder.buildQueryVehicleBoo(reqId, sessionId, System.currentTimeMillis(), tid, etag, station, lane, "C", "I", minBalance, null, null);
             case CMD_CHECKOUT_RESERVE:

@@ -37,12 +37,20 @@ fn parse_query_vehicle_boo(data: &[u8]) -> Result<QUERY_VEHICLE_BOO, Box<dyn Err
     req.request_id = i64::from_le_bytes(data[12..20].try_into()?);
     req.session_id = i64::from_le_bytes(data[20..28].try_into()?);
     req.timestamp = i64::from_le_bytes(data[28..36].try_into()?);
-    req.tid = String::from_utf8_lossy(&data[36..60]).trim_end_matches('\0').to_string();
-    req.etag = String::from_utf8_lossy(&data[60..84]).trim_end_matches('\0').to_string();
+    req.tid = String::from_utf8_lossy(&data[36..60])
+        .trim_end_matches('\0')
+        .to_string();
+    req.etag = String::from_utf8_lossy(&data[60..84])
+        .trim_end_matches('\0')
+        .to_string();
     req.station = i32::from_le_bytes(data[84..88].try_into()?);
     req.lane = i32::from_le_bytes(data[88..92].try_into()?);
-    req.station_type = String::from_utf8_lossy(&data[92..93]).trim_end_matches('\0').to_string();
-    req.lane_type = String::from_utf8_lossy(&data[93..94]).trim_end_matches('\0').to_string();
+    req.station_type = String::from_utf8_lossy(&data[92..93])
+        .trim_end_matches('\0')
+        .to_string();
+    req.lane_type = String::from_utf8_lossy(&data[93..94])
+        .trim_end_matches('\0')
+        .to_string();
     req.min_balance = i32::from_le_bytes(data[94..98].try_into()?);
     if data.len() >= 106 {
         req.general1.copy_from_slice(&data[98..106]);
@@ -147,10 +155,11 @@ pub async fn handle_query_vehicle_boo(
             if req.min_balance > 0 && sub.account_id > 0 {
                 let pool = db_pool.clone();
                 let account_id = sub.account_id;
-                let acc_opt = tokio::task::spawn_blocking(move || get_account_for_charge(&pool, account_id))
-                    .await
-                    .unwrap_or(Ok(None))
-                    .unwrap_or(None);
+                let acc_opt =
+                    tokio::task::spawn_blocking(move || get_account_for_charge(&pool, account_id))
+                        .await
+                        .unwrap_or(Ok(None))
+                        .unwrap_or(None);
                 if let Some(acc) = acc_opt {
                     if acc.available_balance < req.min_balance as f64 {
                         resp.min_balance_status = 1;
@@ -166,7 +175,10 @@ pub async fn handle_query_vehicle_boo(
                 "[QueryVehicleBoo] subscriber not found"
             );
             resp.status = bect::SUBSCRIBER_NOT_FOUND;
-            (bect::SUBSCRIBER_NOT_FOUND, start.elapsed().as_millis() as i32)
+            (
+                bect::SUBSCRIBER_NOT_FOUND,
+                start.elapsed().as_millis() as i32,
+            )
         }
     };
 
