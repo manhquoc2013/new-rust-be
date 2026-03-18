@@ -36,16 +36,18 @@ public class FeTestClientApp extends JFrame {
     private final JTextField userField = new JTextField("", 10);
     private final JPasswordField passField = new JPasswordField(10);
     private final JTextField encryptionKeyField = new JTextField(16);
-    private final JTextField timeoutField = new JTextField("60", 4);
     private final JTextField stationField = new JTextField("0", 6);
     private final JTextField laneField = new JTextField("0", 4);
+
+    /** Timeout (giây) cho bản tin CONNECT, mặc định 10s. */
+    private static final int DEFAULT_CONNECT_TIMEOUT_SEC = 10;
 
     private final DefaultListModel<String> etagListModel = new DefaultListModel<>();
     private final JList<String> etagList = new JList<>(etagListModel);
 
     private final JComboBox<String> commandCombo = new JComboBox<>(new String[]{
-            "CHECKIN (0x66)", "COMMIT (0x68)", "ROLLBACK (0x6A)", "LOOKUP_VEHICLE (0x96)", "QUERY_VEHICLE_BOO (0x64)",
-            "CHECKOUT_RESERVE (0x98)", "CHECKOUT_COMMIT (0x9A)", "CHECKOUT_ROLLBACK (0x9C)"
+            "CHECKIN (0A)", "COMMIT (3A)", "ROLLBACK (3A)", "LOOKUP_VEHICLE (1AZ)", "QUERY_VEHICLE_BOO (1A)",
+            "CHECKOUT_RESERVE (2AZ)", "CHECKOUT_COMMIT (3AZ)", "CHECKOUT_ROLLBACK (3AZ)"
     });
 
     private final JTextField sessionIdField = new JTextField("0", 14);
@@ -92,7 +94,7 @@ public class FeTestClientApp extends JFrame {
     private String savedKey;
     private String savedUser;
     private String savedPass;
-    private int savedTimeout;
+    private int savedTimeout = DEFAULT_CONNECT_TIMEOUT_SEC;
     private volatile boolean reconnectInProgress;
     private volatile boolean userRequestedDisconnect;
 
@@ -110,6 +112,7 @@ public class FeTestClientApp extends JFrame {
         });
         handshakeExecutor = Executors.newSingleThreadScheduledExecutor();
         loadConnections();
+        loadEtags();
         connectionCombo.setModel(connectionModel);
         connectionCombo.setRenderer((list, value, index, isSelected, cellHasFocus) -> {
             JLabel l = new JLabel(value != null ? value.toString() : "");
@@ -117,6 +120,10 @@ public class FeTestClientApp extends JFrame {
             return l;
         });
         connectionCombo.addActionListener(e -> onConnectionSelected());
+        if (connectionModel.getSize() > 0) {
+            connectionCombo.setSelectedIndex(0);
+            onConnectionSelected();
+        }
         sessionIdField.setEditable(false);
         sessionIdField.setToolTipText("Từ CONNECT_RESP khi kết nối thành công, dùng xuyên suốt.");
 
@@ -177,13 +184,8 @@ public class FeTestClientApp extends JFrame {
         row2.add(new JLabel("Encryption key (16):"));
         encryptionKeyField.setToolTipText("16 ký tự cho AES-128");
         row2.add(encryptionKeyField);
-        row2.add(new JLabel("Timeout (s):"));
-        timeoutField.setToolTipText("Timeout cho bản tin CONNECT");
-        row2.add(timeoutField);
         row2.add(new JLabel("Station:"));
         row2.add(stationField);
-        row2.add(new JLabel("Lane:"));
-        row2.add(laneField);
         p.add(row2, BorderLayout.CENTER);
 
         return p;
@@ -216,7 +218,7 @@ public class FeTestClientApp extends JFrame {
         c.setPassword(new String(passField.getPassword()));
         c.setEncryptionKey(encryptionKeyField.getText());
         c.setStation(stationField.getText().trim());
-        c.setLane(laneField.getText().trim());
+        c.setLane("0");
         String name = JOptionPane.showInputDialog(this, "Tên profile:", "Kết nối " + c.getHost() + ":" + c.getPort());
         if (name != null) {
             c.setName(name.trim());
@@ -237,7 +239,6 @@ public class FeTestClientApp extends JFrame {
         sel.setPassword(new String(passField.getPassword()));
         sel.setEncryptionKey(encryptionKeyField.getText());
         sel.setStation(stationField.getText().trim());
-        sel.setLane(laneField.getText().trim());
         ConnectionManager.save(connectionList());
     }
 
@@ -270,11 +271,13 @@ public class FeTestClientApp extends JFrame {
             String s = JOptionPane.showInputDialog(this, "Nhập eTag:");
             if (s != null && !s.trim().isEmpty()) {
                 etagListModel.addElement(s.trim());
+                saveEtags();
             }
         });
         removeEtag.addActionListener(e -> {
             int[] indices = etagList.getSelectedIndices();
             for (int i = indices.length - 1; i >= 0; i--) etagListModel.remove(indices[i]);
+            saveEtags();
         });
         useEtag.addActionListener(e -> {
             List<String> sel = etagList.getSelectedValuesList();
@@ -329,7 +332,6 @@ public class FeTestClientApp extends JFrame {
 
         if (cmd == CMD_CHECKIN) {
             addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
-            addRow(dynamicFormPanel, c, row++, "Station:", stationField);
             addRow(dynamicFormPanel, c, row++, "Lane:", laneField);
             addRow(dynamicFormPanel, c, row++, "Plate:", plateField);
             addRow(dynamicFormPanel, c, row++, "TID:", tidField);
@@ -337,18 +339,15 @@ public class FeTestClientApp extends JFrame {
         } else if (cmd == CMD_COMMIT || cmd == CMD_ROLLBACK) {
             addRow(dynamicFormPanel, c, row++, "Ticket ID:", ticketIdField);
             addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
-            addRow(dynamicFormPanel, c, row++, "Station:", stationField);
             addRow(dynamicFormPanel, c, row++, "Lane:", laneField);
             addRow(dynamicFormPanel, c, row++, "Status (plate):", statusField);
             addRow(dynamicFormPanel, c, row++, "Plate:", plateField);
         } else if (cmd == CMD_LOOKUP_VEHICLE) {
             addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
-            addRow(dynamicFormPanel, c, row++, "Station:", stationField);
             addRow(dynamicFormPanel, c, row++, "Lane:", laneField);
             addRow(dynamicFormPanel, c, row++, "TID:", tidField);
         } else if (cmd == CMD_QUERY_VEHICLE_BOO) {
             addRow(dynamicFormPanel, c, row++, "eTag:", etagField);
-            addRow(dynamicFormPanel, c, row++, "Station:", stationField);
             addRow(dynamicFormPanel, c, row++, "Lane:", laneField);
             addRow(dynamicFormPanel, c, row++, "TID:", tidField);
             addRow(dynamicFormPanel, c, row++, "MinBalance:", minBalanceField);
@@ -417,9 +416,31 @@ public class FeTestClientApp extends JFrame {
         p.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(), "Trạng thái gửi & Response", TitledBorder.LEFT, TitledBorder.TOP));
         statusResponseArea.setEditable(false);
         statusResponseArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JButton clearLogButton = new JButton("Clear log");
+        clearLogButton.addActionListener(e -> {
+            statusResponseArea.setText("");
+            sendStatusLabel.setText(" ");
+        });
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        topBar.add(clearLogButton);
+        p.add(topBar, BorderLayout.NORTH);
         p.add(new JScrollPane(statusResponseArea), BorderLayout.CENTER);
         p.add(sendStatusLabel, BorderLayout.SOUTH);
         return p;
+    }
+
+    private void loadEtags() {
+        for (String etag : EtagListManager.load()) {
+            etagListModel.addElement(etag);
+        }
+    }
+
+    private void saveEtags() {
+        List<String> list = new ArrayList<>();
+        for (int i = 0; i < etagListModel.getSize(); i++) {
+            list.add(etagListModel.getElementAt(i));
+        }
+        EtagListManager.save(list);
     }
 
     private void doConnect() {
@@ -435,11 +456,7 @@ public class FeTestClientApp extends JFrame {
             appendStatus("Lỗi: Port không hợp lệ.");
             return;
         }
-        int timeout = 60;
-        try {
-            timeout = Integer.parseInt(timeoutField.getText().trim());
-            if (timeout <= 0) timeout = 60;
-        } catch (NumberFormatException ignored) { }
+        final int timeout = DEFAULT_CONNECT_TIMEOUT_SEC;
         if (key.length() != 16) {
             appendStatus("Cảnh báo: Encryption key nên đủ 16 ký tự (AES-128).");
         }
@@ -728,6 +745,7 @@ public class FeTestClientApp extends JFrame {
         SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
             final List<String> errors = new ArrayList<>();
             final List<FeResponseParser.ParsedResponse> responses = new ArrayList<>();
+            final List<String> requestLogs = new ArrayList<>();
             boolean disconnectedDuringSend = false;
 
             @Override
@@ -741,6 +759,8 @@ public class FeTestClientApp extends JFrame {
                             errors.add("eTag " + etag + ": Không hỗ trợ command hoặc thiếu tham số.");
                             continue;
                         }
+                        requestLogs.add("[" + etag + "] Request (raw hex): " + bytesToHex(plain));
+                        requestLogs.add("[" + etag + "] Request (unicode): " + bytesToUnicodeSafe(plain));
                         client.send(plain);
                         byte[] respDecrypted = client.receive();
                         FeResponseParser.ParsedResponse pr = FeResponseParser.parse(respDecrypted);
@@ -763,15 +783,14 @@ public class FeTestClientApp extends JFrame {
             @Override
             protected void done() {
                 sendButton.setEnabled(true);
+                for (String line : requestLogs) appendStatus(line);
                 for (String err : errors) appendStatus("Lỗi: " + err);
                 for (int i = 0; i < responses.size(); i++) {
                     FeResponseParser.ParsedResponse pr = responses.get(i);
                     String etag = i < etags.size() ? etags.get(i) : "?";
                     appendStatus("[" + etag + "] " + pr.summary);
-                    if (pr.rawHex != null && pr.rawHex.length() > 150)
-                        appendStatus("  Hex: " + pr.rawHex.substring(0, 150) + "...");
-                    else if (pr.rawHex != null)
-                        appendStatus("  Hex: " + pr.rawHex);
+                    if (pr.rawHex != null)
+                        appendStatus("  Response (raw hex): " + pr.rawHex);
                 }
                 if (disconnectedDuringSend) {
                     appendStatus("Đã ngắt kết nối (server không trả bản tin hoặc timeout 5s).");
@@ -854,6 +873,30 @@ public class FeTestClientApp extends JFrame {
         } catch (NumberFormatException e) {
             return def;
         }
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        if (bytes == null) return "";
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) sb.append(String.format("%02X", b & 0xFF));
+        return sb.toString();
+    }
+
+    /** Decode bytes as UTF-8; replace invalid sequences and non-printable/control chars with '.'. */
+    private static String bytesToUnicodeSafe(byte[] bytes) {
+        if (bytes == null) return "";
+        String s;
+        try {
+            s = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "(invalid UTF-8)";
+        }
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            sb.append(c >= 32 && c != 127 ? c : '.');
+        }
+        return sb.toString();
     }
 
     private void appendStatus(String line) {
